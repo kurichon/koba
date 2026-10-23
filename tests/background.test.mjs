@@ -37,6 +37,7 @@ function fixture({cards=[cardA,cardB],fresh=true,session=null,apiKey=key,journal
 
 async function boot(data,{fetcher=null,failSet=null,tabs=[]}={}) {
   let handler;
+  let installed;
   const events=[],calls=[],scripts=[];
   const listeners=[];
   const longTimers=new Map();
@@ -64,7 +65,7 @@ async function boot(data,{fetcher=null,failSet=null,tabs=[]}={}) {
   }
   const chrome={
     runtime:{
-      onInstalled:{addListener(){}},onStartup:{addListener(){}},
+      onInstalled:{addListener(fn){installed=fn;}},onStartup:{addListener(){}},
       onMessage:{addListener(fn){handler=fn;}},getManifest:()=>({version:"0.3.3"}),
       openOptionsPage:async()=>{}
     },
@@ -125,6 +126,7 @@ async function boot(data,{fetcher=null,failSet=null,tabs=[]}={}) {
   await (await load("background.js")).evaluate();
   const runtime={
     data,events,calls,scripts,remoteCards,chrome,
+    install(){return installed?.();},
     send(message,tabId=1){return new Promise(resolve=>handler(message,{tab:{id:tabId}},response=>resolve(clone(response))));},
     async state(tabId=1){return await this.send({type:"JPDB_GET_PANEL_STATE"},tabId);},
     async expire(){for(const [id,fn] of [...longTimers]){longTimers.delete(id);fn();}await flush();},
@@ -164,6 +166,22 @@ async function grade(runtime,tabId=1) {
 }
 const cases=[];
 async function test(name,fn){await fn();cases.push(name);console.log("PASS "+name);}
+
+await test("onInstalled must not overwrite API key or preferences saved during initialization",async()=>{
+  const data=fixture();
+  delete data.local.apiKey;
+  delete data.local.enabled;
+  const runtime=await boot(data);
+  // The installer has read empty settings, but the user saves settings before
+  // its asynchronous continuation. Defaults must not clobber these values.
+  const installing=runtime.install();
+  await runtime.chrome.storage.local.set({apiKey:key,enabled:false});
+  await installing;
+  await flush();
+  assert.equal(data.local.apiKey,key,'installer must not blank a newly saved key');
+  assert.equal(data.local.enabled,false,'installer must not change an explicit disabled choice');
+  runtime.stop();
+});
 
 await test("panel ownership and close remain immediate during blocked lookup; no stale reopening",async()=>{
   const data=fixture({fresh:false});
@@ -509,4 +527,3 @@ await test("force sync replaces an ordinary cached-ID scan and rejects its late 
 });
 
 console.log(JSON.stringify({passed:cases.length,cases,environment:"Actual source modules and runtime message interface; isolated simulated Chrome and JPDB; no real account traffic"},null,2));
-
