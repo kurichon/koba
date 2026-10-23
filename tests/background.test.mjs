@@ -371,6 +371,19 @@ await test("background refresh errors do not block remaining cached cards or tri
   runtime.stop();
 });
 
+await test("warm refresh does not hide an expired deck inventory behind a fresh state timestamp",async()=>{
+  const data=fixture({cards:[cardA,cardB]});
+  data.local.jpdbReviewCacheV4.statesCachedAt=Date.now()-90_000;
+  data.local.jpdbReviewCacheV4.vocabCachedAt=Date.now()-13*60*60*1000;
+  const runtime=await boot(data);
+  const state=await open(runtime);
+  assert.equal(state.state.card.vid,101);
+  assert.equal(state.state.loading,false);
+  await flush();
+  assert.equal(runtime.calls.length,0,"do not refresh old deck IDs and label them globally fresh");
+  runtime.stop();
+});
+
 await test("recently graded due card remains withheld across forced scans until JPDB confirms change",async()=>{
   const runtime=await boot(fixture({cards:[cardA,cardB]}),{fetcher:async(url,options,normal)=>
     url.endsWith("/review")?http(null,204):normal(url,options)});

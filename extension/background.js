@@ -409,6 +409,9 @@ function maybeWarmRefresh() {
   if (warmJob || loadJob || !settings?.enabled || !settings.apiKey ||
     journal.active || panelState.openTabId === null || !sharedSession.card ||
     !memory.vocabIds.length || !memory.statesCachedAt || memory.needsRefill) return;
+  // Once the deck-ID inventory expires, the next authoritative foreground
+  // refresh must reload deck membership instead of repeatedly warming old IDs.
+  if (Date.now() - memory.vocabCachedAt >= VOCAB_CACHE_TTL_MS) return;
   const age = Date.now() - memory.statesCachedAt;
   const lowQueue = eligibleCards().length <= WARM_LOW_QUEUE_SIZE;
   if (age < WARM_REFRESH_AGE_MS && !(lowQueue && age >= WARM_LOW_QUEUE_AGE_MS)) return;
