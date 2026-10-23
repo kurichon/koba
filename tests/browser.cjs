@@ -161,7 +161,28 @@ async function ui(page) {
   });
 }
 async function cardReady(page, spelling) {
-  await until(async()=>{const s=await ui(page);return s.open && s.word===spelling && !/Loading|Saving|Syncing|Checking/i.test(s.status);}, 'ready card ' + spelling);
+  try {
+    await until(async()=>{const s=await ui(page);return s.open && s.word===spelling && !/Loading|Saving|Syncing|Checking/i.test(s.status);}, 'ready card ' + spelling);
+  } catch (error) {
+    // A timed-out fixture must explain whether the failure was extension state,
+    // service-worker lifecycle, or the test transport; no keys or card text leak.
+    const visible = await ui(page).catch(e => ({error:String(e)}));
+    const workers = await Promise.all(page.context().serviceWorkers().map(async worker => {
+      try {
+        return await worker.evaluate(async () => {
+          const session = (await chrome.storage.session.get('sharedReviewSessionV3')).sharedReviewSessionV3;
+          const fixture = globalThis.__jpdbFixture;
+          return {fixtureInstalled:!!fixture, requests:fixture?.requests?.map(r=>r.endpoint) || [],
+            attemptCount:fixture?.attempts?.length || 0,
+            cardCount:fixture?.cards?.length || 0,
+            loadState:{loading:session?.loading,cardId:session?.card?.vid,error:session?.error?.code,
+              revision:session?.revision},
+            workerVersion:chrome.runtime.getManifest().version};
+        });
+      } catch (e) { return {error:String(e)}; }
+    }));
+    throw new Error(`${error.message}; ui=${JSON.stringify(visible)}; workers=${JSON.stringify(workers)}`);
+  }
 }
 async function runCase(name, fn) {
   if (process.env.JPDB_TEST_CASE && !name.includes(process.env.JPDB_TEST_CASE)) return;
