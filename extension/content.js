@@ -5,6 +5,8 @@
   let mutationObserver = null;
   let anchorResizeObserver = null;
   let currentAnchor = null;
+  // Hold the panel position during reveal/grade layout changes.
+  let pinnedPopupTop = null;
 
   try {
     document.dispatchEvent(new CustomEvent(RETIRE_EVENT));
@@ -368,6 +370,7 @@
       restoreFocusTarget = previous && previous !== host ? previous : lastPageFocusTarget || restoreFocusTarget;
     }
     const shouldRestore = !open && panelOpen && restoreFocus && document.activeElement === host;
+    if (Boolean(open) !== panelOpen) pinnedPopupTop = null;
     panelOpen = Boolean(open);
     launcher.classList.toggle('open', panelOpen);
     launcher.setAttribute('aria-expanded', String(panelOpen));
@@ -641,8 +644,20 @@
     const width = Math.max(180, Math.min(420, innerWidth - 24));
     popup.style.width = `${width}px`;
     popup.style.left = `${Math.max(12, Math.min(innerWidth - width - 12, left + 40))}px`;
-    const height = popup.getBoundingClientRect().height || 220;
-    popup.style.top = `${Math.round(Math.max(12, Math.min(innerHeight - height - 12, top + 17 - height / 2)))}px`;
+    // Center once on opening, then pin the top edge. Revealing an answer can
+    // significantly increase its height; recentering on every render made the
+    // whole popup jump (even when the user only pressed Reveal).
+    const availableHeight = Math.max(0, innerHeight - 24);
+    const reservedHeight = Math.min(320, availableHeight);
+    if (pinnedPopupTop === null) {
+      const height = popup.getBoundingClientRect().height || 220;
+      pinnedPopupTop = Math.round(Math.max(12,
+        Math.min(innerHeight - reservedHeight - 12, top + 17 - height / 2)));
+    }
+    const visibleTop = Math.max(12, Math.min(pinnedPopupTop, innerHeight - reservedHeight - 12));
+    popup.style.top = `${Math.round(visibleTop)}px`;
+    // Grow or scroll inside the popup instead of moving its upper edge.
+    popup.style.maxHeight = `${Math.max(48, Math.min(520, innerHeight - visibleTop - 12))}px`;
   }
 
   function schedulePosition() {
