@@ -129,17 +129,18 @@ async function app({ extension = source } = {}) {
   });
   a.attempts = async () => a.worker.evaluate(() => globalThis.__jpdbFixture.attempts.length);
   a.restart = async () => {
+    // Trigger a real extension reload without depending on chrome://extensions
+    // internals, whose custom-element controls vary by Chromium version.
     const next = context.waitForEvent('serviceworker', {timeout:15000});
     next.catch(() => {});
-    const manager = await context.newPage();
-    await manager.goto('chrome://extensions');
-    const devMode = manager.locator('#devMode');
-    if (!(await devMode.evaluate(toggle => toggle.checked))) await devMode.click();
-    const item = manager.locator('extensions-item').filter({hasText:'KoBa'});
-    await item.locator('#dev-reload-button').click();
+    try { await a.worker.evaluate(() => chrome.runtime.reload()); }
+    catch (error) {
+      // A successful reload may destroy the calling worker's execution context
+      // before Playwright receives the promise result.
+      if (!/Target closed|Execution context was destroyed|context.*destroyed|Worker was terminated/i.test(String(error))) throw error;
+    }
     a.worker = await next;
     await installTransport(a.worker);
-    await manager.close();
   };
   a.close = async () => {
     await context.close(); apps.delete(a); fs.rmSync(profile,{recursive:true,force:true});
