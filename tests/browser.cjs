@@ -128,7 +128,7 @@ async function app({ extension = source } = {}) {
   };
   a.configure = async patch => a.worker.evaluate(patch => Object.assign(globalThis.__jpdbFixture, patch), patch);
   a.release = async () => a.worker.evaluate(() => {
-    const f=globalThis.__jpdbFixture; f.holdLookups=false; f.holdRefresh=false;
+    const f=globalThis.__jpdbFixture; f.holdLookups=false; f.holdRefresh=false; f.holdSecondLookup=false;
     f.holds.splice(0).forEach(resolve=>resolve());
   });
   a.attempts = async () => a.worker.evaluate(() => globalThis.__jpdbFixture.attempts.length);
@@ -243,6 +243,8 @@ async function run() {
       const view=await ui(p);
       assert.equal(view.word,'','partially scanned results must not be presented as complete');
       assert.match(view.loadingText,/400 of 850/);
+      await until(() => a.worker.evaluate(() => globalThis.__jpdbFixture.holds.length > 0),
+        'second lookup is actually blocked');
       await a.release();
       await cardReady(p,'entry0');
       assert.equal(await a.attempts(),0);
