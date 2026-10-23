@@ -1,195 +1,81 @@
-# KoBa — Kotoba no Soba
+# KoBa — Kotoba no Soba (ことばのそば)
 
-**Version 0.3.6 — steady popup positioning when revealing and switching tabs.**
+**ことば、そばに。 — A little Japanese, always close by.**
 
-*ことば、そばに。 — A little Japanese, always close by.*
+Review your existing [JPDB](https://jpdb.io/) Japanese vocabulary while using ChatGPT—one card at a time, only when you choose.
 
-A small, manual review popup for existing JPDB vocabulary while using ChatGPT.
-It connects directly to JPDB. There is no backend, OpenAI API call, automatic
-interruption timer, or audio feature.
+[**Download the latest version**](https://github.com/kurichon/koba/releases/latest) · [Getting started](#installation) · [Using KoBa](#how-to-use) · [Help & troubleshooting](docs/USER_GUIDE.md)
 
-The source repository is [kurichon/koba](https://github.com/kurichon/koba).
-GitHub release checks are opt-in and remain inactive until enabled in settings.
-The repository can prepare draft releases through GitHub Actions. Publishing a
-release or Chrome Web Store listing remains a separate action.
+[![GitHub release](https://img.shields.io/github/v/release/kurichon/koba?label=Latest%20release)](https://github.com/kurichon/koba/releases/latest) [![MIT License](https://img.shields.io/github/license/kurichon/koba)](LICENSE)
 
-## Upgrade an existing v0.3.1 installation
+KoBa is a free, open-source browser extension for **desktop Chrome and Brave**. It opens a small review panel beside ChatGPT, talks directly to your JPDB account, and stays out of the way when you are working. There are no automatic study interruptions, no audio, and no separate server to set up.
 
-1. Close any open JPDB review popup.
-2. Copy the files from this project's `extension/` directory into the **same
-   directory** currently loaded in Chrome or Brave. Alternatively, extract
-   `dist/KoBa_v0.3.6.zip` into that directory.
-3. Open `chrome://extensions` or `brave://extensions` and click **Reload** on
-   the existing KoBa installation.
-4. Verify **0.3.6** in the extension settings. Open ChatGPT and click `○`.
-   Refresh an existing ChatGPT tab once if its controls do not update.
+> **Before you start:** You need a JPDB account and its API key. KoBa currently installs as an **unpacked extension** from GitHub, not from the Chrome Web Store.
 
-`manifest.json` must be directly inside the loaded directory. Keep the existing
-extension installed and retain its folder path to preserve its API key and
-settings. Loading a different folder, removing the extension, or installing a
-future store edition can create a different extension identity.
+## What KoBa does
 
-For a first installation, open the browser's Extensions page, enable **Developer
-mode**, choose **Load unpacked**, and select `extension/`. Open the extension's
-toolbar settings, enter the JPDB API key, then **Save** and **Test connection**.
-Do not select the entire repository as the extension folder.
+- **Review on demand.** Click the small `○` button in ChatGPT to reveal and grade vocabulary. Close it whenever you want.
+- **Stay in your workflow.** Reviews advance card-by-card; nothing appears automatically. Keyboard shortcuts work only inside the review panel.
+- **Choose your position.** Drag the button up or down, or use the slider in KoBa settings. Its horizontal position remains anchored beside ChatGPT's composer.
+- **Keep your progress safe.** KoBa works with JPDB's existing review schedule and avoids automatically resending a grade when its outcome is uncertain.
+- **Resume across tabs.** Your review queue is shared between ChatGPT tabs; simply changing tabs does not open a panel.
 
-The declared minimum is Chrome/Chromium 114. This candidate was exercised in
-isolated Chromium; see [qualification](docs/QUALIFICATION.md) for exact evidence
-and the checks still needed on the user's Chrome/Brave and live accounts.
+## Installation
 
-## Review behavior
+### First-time setup
 
-Nothing opens automatically. Click the neutral `○` beside the ChatGPT
-conversation/composer column when you want to review. Reveal the answer and choose
-a grade; the popup advances after each accepted review until you close it.
-Closing a revealed but ungraded card resets it to its front.
+1. Open **[KoBa Releases](https://github.com/kurichon/koba/releases/latest)** and expand **Assets**. Download `KoBa_vX.Y.Z.zip` (the versioned extension ZIP), **not** GitHub's “Source code” archive.
+2. Extract the ZIP into a folder you can keep. Check that **`manifest.json` is directly inside** the folder you will select—do not point your browser at the ZIP or the entire source repository.
+3. Open `chrome://extensions` in Chrome or `brave://extensions` in Brave. Switch on **Developer mode**, choose **Load unpacked**, and select the extracted folder.
+4. Open **KoBa's extension options** (from its toolbar entry or **Details → Extension options**). Enter your **JPDB API key**, click **Save**, then **Test connection**. Your key is not provided with the download.
+5. Open or refresh [ChatGPT](https://chatgpt.com/). Look for the small `○` button beside the conversation composer, and click it to begin.
 
-Only one ChatGPT tab owns the popup. Clicking the launcher in another tab moves
-the same shared review session there. Merely switching tabs does not move or open
-the popup. Shortcuts work only while the popup has focus.
+The first load may take longer for a large JPDB collection while KoBa checks which vocabulary is currently reviewable. The panel displays progress while it loads.
 
-| Key | Action |
+### Updating an existing installation
+
+1. Download the newer `KoBa_vX.Y.Z.zip` from [Releases](https://github.com/kurichon/koba/releases/latest).
+2. Extract **over the same folder** already loaded as KoBa, replacing the previous extension files.
+3. Find KoBa at `chrome://extensions` or `brave://extensions` and click **Reload**. Refresh an already-open ChatGPT tab if needed.
+
+**Do not uninstall KoBa or load a second copy just to update it.** Keeping the same extension installation and folder preserves its browser-local API key, settings, and review state. A new installation can have a different extension identity and separate storage.
+
+## How to use
+
+Click `○` to open the review panel. Choose **Reveal**, then rate the word. KoBa moves to the next available card after JPDB accepts the grade. Click `×`, `○`, or press **Esc** to close the panel.
+
+| Shortcut | When the review panel has focus |
 | --- | --- |
-| Space | Reveal |
-| 1 | Nothing |
-| 2 | Something |
-| 3 | Hard |
-| 4 | Okay |
-| 5 | Easy |
-| Escape | Close; the launcher and `×` also close |
+| **Space** | Reveal the current answer |
+| **1** | Nothing |
+| **2** | Something |
+| **3** | Hard |
+| **4** | Okay |
+| **5** | Easy |
+| **Esc** | Close the panel |
 
-The queue includes due and failed vocabulary, and learning vocabulary only when
-JPDB supplies an elapsed `due_at`. Vocabulary may be written with kanji or kana.
-New, redundant, locked, suspended, and blacklisted entries are excluded. This uses
-deck vocabulary; it does not implement dedicated kanji/component learning.
+Shortcuts do not override ordinary typing in ChatGPT. If you close a revealed but ungraded card, its answer is hidden the next time you open it.
 
-## KoBa identity and licensing (0.3.3)
+**Move the button:** Drag `○` vertically to your preferred height. Or open **KoBa Settings → Behavior → Button vertical position** and use **Reset to center** to return to the original position. Horizontal alignment stays attached to ChatGPT's composer.
 
-- **Short name:** KoBa. **Expanded name:** Kotoba no Soba (ことばのそば).
-- **Tagline:** ことば、そばに。 (*Kotoba, soba ni.*)
-- **License:** [MIT](LICENSE), copyright (c) 2026 kurichon. The runtime ZIP also includes a license copy.
-- **Public source/release repository:** [kurichon/koba](https://github.com/kurichon/koba).
-- The release builder generates both `KoBa_vVERSION.zip` and a byte-identical legacy-named
-  `JPDB_Review_Button_for_ChatGPT_vVERSION.zip`. Pre-rebrand v0.3.2 update checkers
-  require the legacy filename, so do not remove this alias from future releases
-  while those clients need the upgrade path.
-- This release changes product identity and packaging, not the JPDB grading workflow.
-  Existing unpacked installations should upgrade in place to retain browser storage.
-- This is an independent tool, not affiliated with or endorsed by JPDB or OpenAI.
-  The license covers this repository's code, not the external services or their content.
+**Across tabs:** Click KoBa in another ChatGPT tab to move the shared review panel there. Switching tabs alone does not open or transfer it.
 
-## Changes in 0.3.6
+KoBa reviews **due, failed, and eligible learning vocabulary** already in your JPDB decks. It does not introduce new vocabulary or dedicated kanji/component-learning cards. [More about card eligibility and review recovery →](docs/USER_GUIDE.md)
 
-**New in the v0.3.6 candidate:** You can drag the small KoBa launcher vertically in ChatGPT, or set its height with **KoBa Settings → Behavior → Button vertical position**. Its horizontal alignment still follows ChatGPT's composer. The adjustment is saved for the current browser profile and shared across ChatGPT tabs. Use **Reset to center** for the original location. A drag never opens/closes reviews; an ordinary click still does.
+## Settings, updates, and troubleshooting
 
+In KoBa's extension options you can enable/disable the button, manage your JPDB API key, check the connection, adjust button position, request a fresh sync, and view diagnostics.
 
-The review popup now keeps a stable top edge while Reveal expands the answer or a card changes; smaller windows scroll long answers inside the popup instead of shifting its position. Switching tabs alone does not change review ownership. This update does not change JPDB request/grade handling.
+To check for new versions, open **Settings → Updates**, use repository `kurichon/koba`, and select **Check now** (or opt in to daily checks). GitHub release checks are optional. **KoBa can notify you about an update, but unpacked extensions do not install it automatically**—follow the update steps above.
 
-## Changes in 0.3.5
+If KoBa is missing, taking a long time to load, or shows **Review status uncertain**, start with the [troubleshooting and recovery guide](docs/USER_GUIDE.md). For bugs, use [GitHub Issues](https://github.com/kurichon/koba/issues) and include KoBa's **Copy diagnostics** output if useful—**never share your API key**.
 
-While you have cached review cards available, KoBa can refresh the review queue in the background before the two-minute cache expires. When the queue runs out during a refresh, it uses the existing scan rather than starting a duplicate. Lookups remain sequential and paced; recently accepted grades remain blocked from stale server responses until JPDB confirms a changed schedule. Settings now shows JPDB grade-response, next-card, and background-refresh timings. This optimizes active sessions, not a first cold scan or empty account.
+## Privacy and project information
 
-## Changes in 0.3.4
+Your JPDB API key is saved in your browser's local extension storage and sent to JPDB only when needed for JPDB API calls. It is **not** packaged in the ZIP, committed to this repository, or sent to GitHub. KoBa does not send ChatGPT conversations to a KoBa server, and does not use the OpenAI API. Optional GitHub release checks request access to GitHub's public release API. Treat browser profiles and extension backups containing API keys as sensitive.
 
-On a cold load, KoBa may have to enumerate all JPDB decks and scan their vocabulary to determine which cards are due, failed, or eligible learning cards. The popup now shows the current stage and completed/total counts. This improves visibility but does not reduce the number of API requests. If progress stalls, open **KoBa Settings**, use **Test connection**, and **Copy diagnostics** (the export excludes your key and vocabulary text). Do not clear extension storage or repeatedly grade while troubleshooting.
+KoBa is an independent project and is not affiliated with or endorsed by JPDB or OpenAI.
 
-## Changes in 0.3.2
+**For contributors:** [Development and releases](docs/DEVELOPMENT.md) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Latest qualification](docs/QUALIFICATION.md)
 
-- Opening shows a loading state immediately. Closing, reopening, and transferring
-  the popup do not wait behind network requests.
-- An accepted grade is recorded before optional refreshes. A slow refresh cannot
-  leave an already accepted review stuck at **Saving**.
-- Pending writes survive background restarts. Unknown outcomes become explicit
-  recovery states and are never automatically resubmitted.
-- A fresh queue survives worker sleep. Cache/recovery data is scoped to an API-key
-  fingerprint; late work from a previous key cannot update the current account.
-- Temporary API failures no longer falsely disable `due_at` support. Empty scans
-  are reused, and explicit force sync refreshes the vocabulary list.
-- Rapid reveal-and-grade input is buffered once, controls reflect real state,
-  closing restores composer focus, and composer replacement does not strand the popup.
-- Settings add GitHub release checks, sanitized diagnostic export, and a force-sync
-  flow that acknowledges immediately and reports background completion or failure.
-
-## Interrupted reviews and diagnostics
-
-A missing response cannot tell the extension whether JPDB received a grade.
-**Check review status** reads the current card without sending another grade.
-A changed state or schedule can reconcile the card, but does not prove which exact
-grade was received. An unchanged state remains uncertain.
-
-**Continue without resending** holds the card aside and moves to other reviews.
-That hold survives reloads until an authoritative state/schedule change is observed.
-Up to 32 unresolved cards can be held; the extension does not discard older
-unresolved writes to continue. Use JPDB to resolve the underlying status if needed.
-
-Use **Try again** for recoverable read errors. **Force sync** refreshes vocabulary
-and review states; it does not resend uncertain grades. **Copy diagnostics** exports
-version, counts, status, safe error codes, and recent event types/revisions. It omits
-API keys, vocabulary text, and server response bodies. A selectable text fallback
-appears when clipboard access is unavailable.
-
-## GitHub and updates
-
-The checker reads **published release metadata**, rather than arbitrary commits.
-A newer stable release needs a valid numeric version and the correctly named
-runtime ZIP before it can produce a notice.
-
-The **Updates** field suggests `kurichon/koba`. Enable daily checks if desired and allow
-optional access to `api.github.com` to check published stable releases. **Check now** also works without daily checks.
-JPDB credentials and ChatGPT content are not sent to GitHub. Private repositories
-are not supported by the checker; private source can use a separate public release
-repository without putting a GitHub token in the extension.
-
-**This unpacked edition discovers updates automatically; installation is manual.**
-Open the release, replace files in the same folder, and press Reload. Browser-managed
-automatic installation for normal Chrome on Windows/macOS requires a later Chrome
-Web Store distribution step. [Updates and publication](docs/UPDATES.md) explains
-the browser rules, official sources, configuration, and release process.
-
-## Development and release
-
-Use Node.js 22 or later and Python 3. Runtime code has no external package dependency.
-
-```sh
-npm ci
-npm test
-npx playwright install --with-deps chromium
-npm run test:browser
-npm run build
-```
-
-Browser tests use the actual extension in a disposable profile, a controlled
-ChatGPT layout, and fake JPDB/GitHub transport. They never submit a real review.
-Exact hot upgrades of an existing unpacked folder remain a manual browser
-acceptance check; headless Chromium may retain an older service worker after
-files are replaced.
-The build emits a runtime-only ZIP and checksum in `dist/`, validating version
-agreement, file membership, and all archive bytes. Add `-- --tag v0.3.6` to enforce
-the release tag too.
-
-The included GitHub workflows qualify changes and prepare an **unpublished draft**
-when a matching version tag is pushed **or** via the manual workflow action.
-A remote GitHub run and publication must be verified separately.
-
-| Location | Purpose |
-| --- | --- |
-| `extension/` | Runtime source and unpacked installation folder |
-| `tests/` | State/update tests and actual-browser scenarios |
-| `scripts/build-release.mjs` | Runtime ZIP/checksum builder |
-| `.github/workflows/` | CI and draft-release preparation |
-| `docs/UPDATES.md` | GitHub setup and distribution design |
-| `docs/QUALIFICATION.md` | Resolved findings, evidence, and live-test limits |
-| `dist/` | KoBa ZIP, legacy-compatible ZIP, and checksum |
-
-## Data and permissions
-
-The key remains in `chrome.storage.local`, is sent to JPDB as a bearer credential,
-and is never inserted into the ChatGPT page DOM. Local storage also holds the bounded
-queue, unresolved-write records, and update preferences. Session storage holds the
-current popup/session and bounded diagnostic events.
-
-JPDB host access supports review requests. ChatGPT host access and scripting support
-the popup/reinjection. Storage persists state; alarms schedule optional release checks.
-GitHub API access is optional and requested from settings. There is no telemetry
-endpoint or remote code loading.
+**License:** [MIT](LICENSE) © 2026 kurichon.
