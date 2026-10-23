@@ -1,3 +1,5 @@
+> **v0.3.6 popup stability:** Baseline v0.3.5 content script moved its popup top by 79 px at 1280×760 and 980×580, and 102 px at 720×430, after clicking Reveal in an isolated Chromium fixture. The repaired content script kept the top edge stationary in the same scenarios while displaying the expanded answer. PR CI must pass before merging; current Chrome/Brave and live ChatGPT layouts remain user-validation gates. This is a targeted UI fix; JPDB API and grading behavior are unchanged.
+
 > **v0.3.4 qualification note:** First-load stage/count progress has been added for cold and large-collection scans, with a controlled multi-deck regression. The historical v0.3.2 and v0.3.3 findings remain relevant; live-user collection size, JPDB availability, and the reason for the reported v0.3.3 stall are not verified. A green CI run does not establish the live-user remediation.
 
 > **Historical v0.3.2 record.** This file preserves the tested repair baseline and its original hashes. The KoBa v0.3.3 naming, MIT packaging, release alias and new test results are recorded separately in [BRANDING_0.3.3.md](BRANDING_0.3.3.md).
