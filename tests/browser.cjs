@@ -341,7 +341,18 @@ async function run() {
         assert.equal(await upgraded.locator('.notice').count(),1,'new KoBa UI loads after relaunch');
         assert.equal(await upgraded.locator('#ambient-jpdb-host').count(),1);
         assert.equal(await a.worker.evaluate(async()=> (await chrome.storage.local.get('apiKey')).apiKey),fakeKey);
-        await upgraded.locator('.launcher').click(); await cardReady(upgraded,'猫');
+        await upgraded.locator('.launcher').click();
+        try { await cardReady(upgraded,'猫'); }
+        catch (error) {
+          const state = await ui(upgraded).catch(e => ({uiError:String(e)}));
+          const observed = await a.worker.evaluate(async () => ({
+            version:chrome.runtime.getManifest().version,
+            endpoints:globalThis.__jpdbFixture?.requests?.map(r=>r.endpoint) || [],
+            attempts:globalThis.__jpdbFixture?.attempts?.length || 0,
+            localKeys:Object.keys(await chrome.storage.local.get(null)).filter(x=>/session|review|queue|key|enabled/i.test(x))
+          })).catch(e => ({workerError:String(e)}));
+          throw new Error(`${error.message}; ui=${JSON.stringify(state)}; worker=${JSON.stringify(observed)}`);
+        }
         assert.deepEqual(a.errors,[]);
         return {from:'0.3.1',to:manifest.version,apiKeyPreserved:true,newUiLoaded:true,
           existingTabHotReinjection:'not tested in headless CI'};
