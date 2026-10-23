@@ -1,127 +1,69 @@
-# Architecture and repair scope
+# KoBa architecture
 
-## Accepted scope
+[← Back to KoBa](../README.md) · [Development](DEVELOPMENT.md) · [Current qualification](QUALIFICATION.md)
 
-This repair starts from the recovered v0.3.1 extension. It keeps the manual neutral
-launcher, continuous vocabulary review, one shared session, one visible owner,
-popup-scoped shortcuts, and existing vocabulary eligibility policy. The user
-authorized Qualification & Repair and added a foundation for future GitHub updates.
+This describes the **current v0.3.6 extension**, not an earlier repair proposal. KoBa is a Manifest V3 Chrome/Brave extension. It adds a manually opened vocabulary panel to ChatGPT, uses a local API key to talk directly to JPDB, and has no separate server or OpenAI API integration.
 
-The distribution scope includes configurable release discovery, local packaging,
-and automation for the public `kurichon/koba` repository. Public release/store publication
-requires separate verification. The unpacked extension
-does not have a supported self-install mechanism on normal Windows Chrome.
+## Source responsibilities
 
-## Responsibilities
-
-| Component | Responsibility |
+| Source | Responsibility |
 | --- | --- |
-| `content.js` | Immediate popup UI, local input intent, focus, positioning, verified update link |
-| `background.js` | JPDB requests, authoritative shared state, ownership, queue, submission journal, reinjection |
-| `session.js` | Normalize shared state and validate card/revision actions |
-| `panel.js` | Explicit open/close intents, recipient ownership, duplicate intent handling |
-| `lib.js` | Vocabulary eligibility, sorting, due timestamps, authoritative change checks |
-| `updates.js` | GitHub release metadata, optional access, scheduling, validation, cooldowns |
-| `options.js` / `options.html` | Local settings, connection/sync controls, update configuration, diagnostics |
-| `scripts/build-release.mjs` | Validate and package runtime bytes; emit checksum |
+| `extension/content.js` | Shadow-DOM launcher and review panel; keyboard and pointer interaction; positioning; local optimistic Reveal; focus and stale-response rejection |
+| `extension/background.js` | JPDB requests; one authoritative shared review session; tab ownership; queue/cache; submission journal and recovery; content-script reinjection |
+| `extension/panel.js`, `extension/session.js` | Intent/ownership and session/revision validation |
+| `extension/lib.js` | Reviewable-card eligibility and sorting; due-time and authoritative-card-change interpretation |
+| `extension/options.html`, `extension/options.js` | API key and enabled setting; vertical launcher control; sync, diagnostics, update settings |
+| `extension/updates.js` | Optional GitHub release discovery with strict validation and bounded network requests |
+| `scripts/build-release.mjs` | Allowlisted runtime packaging, version checks, reproducible ZIPs and hashes |
 
-The review mutation queue serializes short state/storage changes. Network work
-runs outside it and applies its result only if the account generation and job
-are still current. Update checking has its own independent operation state.
+Network requests run outside the short state-mutation queue and can only apply results to the current account generation and job. GitHub update checks run independently of JPDB review actions.
 
-## Ownership and UI
+## Manual UI and cross-tab ownership
 
-An opening or closing request carries a unique content-instance intent ID. The
-background records explicit desired state and returns a snapshot specific to the
-requesting tab, with a panel revision. Broadcasts close the former owner. The UI
-also tracks its latest local action, so delayed replies cannot reopen a dismissed
-popup. Loading/saving state does not disable dismissal.
+The launcher appears beside ChatGPT's composer; its **horizontal position is anchored** to the composer. Its vertical position is user-adjustable by dragging or with the settings slider. The chosen viewport-relative position is bounded, saved in browser-local extension settings, and shared across ChatGPT tabs. Default positioning remains centered.
 
-The popup opens locally before waiting for a message. Reveal is optimistic; one
-rapid grade waits for the reveal handshake, then uses the current card and revision.
-The background validates owner, card, revision, reveal state, and pending journal
-before accepting the action. Grades are disabled during loading/errors/recovery.
+The popup opens only following an explicit launcher action and remains usable while data loads. Its top edge is pinned during Reveal and answer resizing to prevent jumping; long content scrolls internally. Keyboard shortcuts are scoped to the panel. Closing or changing tabs does not automatically submit a review.
 
-## Review writes and recovery
+A unique content-instance intent ID and revision identify each open/close request. The background returns a recipient-specific snapshot and closes a former owner when another tab explicitly takes ownership. The UI ignores stale responses that could otherwise reopen a dismissed panel. Normal tab activation does not transfer ownership. Reinjecting a changed content-script version retires its old event handlers/observers rather than stacking two UIs.
 
-1. Validate the action in the serialized mutation queue.
-2. Persist a unique pending attempt, card, grade, and revision to local storage.
-   If that write fails, send no review POST.
-3. Issue one bounded `/review` request. There is no automatic grade retry.
-4. On HTTP acceptance, persist the accepted receipt and removal from the queue
-   in one local-storage update before selecting the next card or refreshing data.
-5. On timeout, network interruption, or ambiguous response, retain an uncertain
-   attempt. A surviving pending attempt after worker restart is also uncertain.
-6. Reconcile only through reads. Continue-without-resending persists a quarantine
-   before progressing. A later authoritative state/schedule change can release it.
+## Review grades and recovery
 
-This is duplicate-write prevention in the client, not a claim of exactly-once
-remote effects. No server idempotency key or review-history API was assumed.
-An observed schedule/state change does not prove the exact submitted grade.
+1. The background validates the owning tab, card identity, session revision, revealed state and current journal.
+2. Before calling JPDB, it persists a unique pending submission attempt locally; if that write fails, **nothing is sent**.
+3. It makes **one** bounded `POST /review`. Grades are never automatically retried.
+4. When JPDB confirms acceptance, the receipt and queue removal are persisted together **before** advancing to a cached next card or performing an optional refresh.
+5. If the response is lost, times out, or a worker restarts with an unresolved write, the attempt remains **uncertain**. Read-only reconciliation and **Continue without resending** preserve uncertainty without writing twice.
 
-## Persistence and bounds
+These protections reduce accidental duplicate submissions; they are **not** proof of exactly-once processing on the JPDB server. A changed card state/schedule can resolve a hold but cannot prove which grade was received.
 
-| State | Storage and bound |
+## Review queue and caching
+
+| Data or operation | Behavior |
 | --- | --- |
-| API key and enabled setting | Existing `chrome.storage.local` keys, preserved during same-identity upgrade |
-| Queue | Local cache scoped to SHA-256 fingerprint of API key; up to 1,000 cached cards |
-| Recent accepted reviews | Bounded cache of 64 card IDs/states/due times; prevents eventual-consistency lookups from returning a just-graded card until JPDB confirms a change |
-| Vocabulary IDs | Local cache, same account scope; 12-hour freshness |
-| Review state freshness | 2 minutes; revalidated when stale |
-| Active review / quarantines | Local journal keyed by account fingerprint; at most 32 quarantined attempts |
-| Open popup/current card | Session storage; revisions and account scope |
-| Diagnostic events | Session storage; up to 50 recent events per log |
-| Release metadata/preferences | Local storage; no GitHub token |
+| JPDB vocabulary inventory | Account-scoped local cache; 12-hour freshness |
+| Card states | Up to 1,000 cached review-card records; nominal 2-minute freshness |
+| Warm refresh | When an eligible card is cached, a sequential background refresh can run before expiry or when a low queue has aged; it does not block Reveal/grade |
+| Batch lookup | Sequential groups of 400 with 350 ms between batches; no parallel request burst |
+| Empty queue | An ongoing warm refresh is reused as foreground loading instead of launching a duplicate |
+| Recently accepted reviews | Up to 64 state markers suppress stale responses until JPDB reports a changed authoritative state/schedule |
+| Ambiguous review attempts | Durable per-account journal; at most 32 held unresolved attempts |
+| API request limits | Reads: 8-second per-attempt deadline with at most one transient retry; grades: 12-second deadline with no retry |
 
-The fingerprint scopes data; it is not encryption or a replacement for API-key
-privacy. Account changes abort active work or discard its late results. Old
-unscoped v0.3.1 caches are deliberately refreshed once rather than reused across
-an unknown account association.
+An initial scan or a truly empty queue may still require complete JPDB lookups. Warm refresh improves the chance of continuous reviewing but does not eliminate API latency or remove the need to revalidate scheduling. Review eligibility follows JPDB's due/failed/learning status; new, locked, suspended, blacklisted, redundant and standalone component/kanji cards are deliberately excluded.
 
-Reads have an 8-second per-attempt deadline and at most one transient retry. Grade
-writes have a 12-second deadline and no retry. A cold scan can contain many bounded
-requests, so total sync time depends on collection size and network. The UI reports
-ongoing work without tying up ownership controls or the settings message channel.
-Explicit force sync replaces an overlapping ordinary scan if necessary to refresh
-the deck/vocabulary list. Late results from superseded scans are rejected.
+## Storage and privacy boundaries
 
-### v0.3.5 active-session queue refresh
+| Location | Contents |
+| --- | --- |
+| `chrome.storage.local` | `apiKey`, enabled setting, launcher vertical position, account-scoped cache/recovery journal, optional GitHub update settings/metadata, sanitized summary metrics |
+| `chrome.storage.session` | Active panel/session state, ownership revisions and bounded diagnostic action events |
+| JPDB API (`jpdb.io`) | Vocabulary/deck lookups and review grades with the locally configured API key |
+| Optional GitHub API (`api.github.com`) | Published release metadata only, after user-granted permission |
 
-When a cached card is available, opening, revealing, or grading can trigger a
-**non-blocking warm refresh** of the known vocabulary IDs before the two-minute
-state cache expires (or when a low queue is at least 20 seconds old). The warm
-scan uses the same 400-entry sequential requests and 350-ms pacing as a normal
-scan, never parallel bursts. A one-minute start cooldown bounds extra requests.
-Its progress does **not** change the session revision or disable grading.
-The current UI card stays in place unless JPDB's completed authoritative
-snapshot materially changes it. Closing the popup cancels an unpromoted warm
-refresh; account change and full sync cancel it regardless.
+Local API-key fingerprints scope cache records; **they are not encryption**. Treat browser storage and profile backups as sensitive. The API key is never part of the runtime ZIP or sent to GitHub. No telemetry service or remote-code loader is included.
 
-If the queue empties during a warm refresh, the already-running request becomes
-the visible foreground refill rather than starting another duplicate scan.
-Warm-scan failures are recorded in sanitized diagnostics without interrupting
-remaining cached reviews. A promoted scan reports its errors normally.
-Accepted card markers survive worker restarts; an unchanged/stale post-grade
-lookup cannot put a graded card back into the queue. This does not imply
-exactly-once server processing and never resends ambiguous grades.
+## Packaging and distribution
 
-Warm refresh reduces **interaction downtime**, not the number of necessary
-JPDB requests over a long session. A first cold load and truly empty review
-queue may still require a complete scan.
+The build allowlists ten files from `extension/`, including the MIT license, and produces a versioned ZIP plus a byte-identical legacy-named alias for old update clients. Neither archive contains fixtures, docs, Node dependencies or credentials. Tests and build are in GitHub Actions; the normal release workflow prepares a **draft**, which must be deliberately published.
 
-## Release discovery and distribution
-
-The GitHub checker is disabled until a repository and optional API access are
-configured. It reads only the latest published stable release metadata, validates
-version/tag/repository/asset identity, and displays a release-page link. It never
-downloads or executes remote code. Checks have independent deadlines, bounded
-metadata, concurrency control, and rate-limit cooldowns.
-
-The KoBa v0.3.3 release builder includes ten explicitly allowlisted runtime files (nine executable/HTML runtime files and LICENSE), verifies
-the ZIP contents, and writes SHA-256. GitHub CI qualifies changes; matching tags
-can create an unpublished draft with checked assets. The owner publishes only
-after review. Browser-managed automatic installation is a separate future store
-distribution step, with a plan needed for the existing unpacked identity.
-
-See [updates](UPDATES.md) for the operational procedure and official platform
-references, and [qualification](QUALIFICATION.md) for evidence and remaining gates.
+The [v0.3.6 stable release](https://github.com/kurichon/koba/releases/tag/v0.3.6) is public. Update checking discovers newer published releases but **cannot install them automatically** into an unpacked Chrome/Brave extension. See [update policy](UPDATES.md) and [developer release steps](DEVELOPMENT.md).

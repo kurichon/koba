@@ -1,79 +1,44 @@
 # Changelog
 
+User-facing download links and installation steps live in the [README](README.md). For archived engineering evidence, see [docs/history](docs/history/).
+
 ## 0.3.6 — 2026-10-23
 
-- Make the launcher vertically draggable while its horizontal X coordinate remains composer-anchored. A short movement threshold separates drag from click and avoids accidental review toggling.
-- Add an accessible vertical-position slider and Reset to center control in extension settings. Store a bounded, viewport-relative position in chrome.storage.local, synced across tabs without altering API keys or review state.
-- Preserve the popup's stabilized Reveal position while users adjust launcher placement; add browser regression for drag, settings, tab sync, and Reveal.
-
-
-- Fix a measured 79–102 px popup jump during Reveal by pinning the panel's vertical position while it is open, rather than recentering on every content resize.
-- Reserve enough space for normal expanded answers; allow internal scrolling on compact viewports. Reposition only when the viewport itself needs clamping or the popup is reopened.
-- Add an actual Chromium regression checking Reveal's position and tab activation without stealing ownership. No changes to JPDB API or grade handling.
-- Requires same-folder Chrome/Brave confirmation against the user's ChatGPT layout; not automatically published.
+- Fixed popup twitching when **Reveal** expands an answer; the popup now keeps a stable upper edge and scrolls long content within smaller windows.
+- Added a vertically draggable `○` launcher while retaining horizontal anchoring beside ChatGPT's composer.
+- Added **Behavior → Button vertical position** and **Reset to center** in extension settings; position is saved across ChatGPT tabs.
+- Preserved the normal click-to-open behavior, shared review ownership, and all existing JPDB grading safeguards.
+- Published as the current stable [v0.3.6 release](https://github.com/kurichon/koba/releases/tag/v0.3.6).
 
 ## 0.3.5 — 2026-10-23
 
-- Keep an account-scoped, cached review queue playable while a **sequential warm refresh** runs outside the review interaction path. Prefetch is triggered by activity when cached states are approaching their two-minute freshness limit, or when the queue is small and old enough to warrant replenishment.
-- Reuse a warm scan as the foreground refill if the queue runs out while it is still underway, instead of making another identical scan. Cancel background work on account switch, explicit full sync, or popup dismissal. Respect a minimum refresh interval; no burst or parallel JPDB lookups and no automatic review-POST retries.
-- Retain up to 64 recently accepted card/schedule markers across worker restarts, withholding a graded card from stale or eventually consistent lookup responses until JPDB confirms a new card state or schedule. Existing due/learning/failed filters and recovery/quarantine semantics are unchanged.
-- Add privacy-safe timing counters for last JPDB grade response, grade-to-next-card transition, and background refresh, exposed in options and copied diagnostics without keys or vocabulary text.
-- Add deterministic background regressions for overlapping grade/prefetch, stale server responses, queue exhaustion, retry bounds, and account recovery, and a Chromium scenario for a deliberately stalled warm refresh.
-- A genuinely cold initial scan still needs to enumerate JPDB decks and vocabulary. Performance improvements are workload-dependent; real-browser/JPDB latency requires separate confirmation.
+- Keep the existing review queue usable while a **sequential background refresh** runs, and reuse that refresh when the queue empties.
+- Suppress stale lookup responses from resurfacing a recently graded card until JPDB confirms a schedule/state change.
+- Add sanitized timing diagnostics for grade responses, card transitions, and refreshes. Preserve paced API requests and no automatic grade resubmission.
 
 ## 0.3.4 — 2026-10-23
 
-- Display live first-scan progress across deck enumeration and batched review eligibility checks, rather than leaving the popup indefinitely on a generic loading message.
-- Carry progress through existing background/session messages and surface it in settings and sanitized diagnostics.
-- Clear stale progress on completion, error, and extension-worker restart; preserve card eligibility rules and review submission safeguards.
-- Add controlled large-deck tests and a Chromium fixture for a delayed second lookup batch.
-- First-time scan still needs to read the account's vocabulary; this update improves observability, not a guaranteed cold-sync speedup. Live JPDB account validation remains necessary.
+- Show stage and counts during first-time deck enumeration and vocabulary-eligibility checks.
+- Clear loading indicators correctly after errors and worker restarts, and add slow-batch browser regressions.
 
 ## 0.3.3 — 2026-10-23
 
-- Adopt **KoBa** as the public product name, from *Kotoba no Soba* (ことばのそば),
-  with tagline **ことば、そばに。**
-- License the code under MIT; include the notice in the runtime ZIP.
-- Package `KoBa_vVERSION.zip` plus a byte-identical legacy-named ZIP for updates
-  from v0.3.2 without breaking its strict release-asset expectation.
-- Adjust the update validator for both names with the same strict URL checks.
-- Plan one public `kurichon/koba` source-and-releases repository; no publication yet.
-- No changes to review timing, grade handling, card filtering, or permission scope.
-
+- Adopt the name **KoBa — Kotoba no Soba (ことばのそば)** and the tagline **ことば、そばに。**
+- Add the [MIT license](LICENSE) and GitHub-ready source/release packaging.
+- Provide `KoBa_vVERSION.zip` and a byte-identical legacy-named alias for older extension update clients.
 
 ## 0.3.2 — 2026-10-23
 
-### Reliability and interaction
-
-- Separate immediate popup ownership from API work; reject stale opening results.
-- Persist pending submissions before POST, and accepted receipts before refresh.
-- Never automatically retry a grade; add read-only reconciliation and durable
-  quarantine for unknown outcomes.
-- Persist fresh queues across worker restarts, scope them to API-key fingerprints,
-  discard old-account responses, and bound request durations/retries.
-- Keep learning-card eligibility through transient errors; only use the `due_at`
-  compatibility fallback for an explicit unsupported-field response.
-- Restore composer focus, buffer one rapid grade behind reveal, reset ungraded
-  answers on close, and rebind after composer replacement.
-- Reinjection checks content version and retires old listeners and observers.
-- Acknowledge force sync promptly, honor full vocabulary refresh during overlapping
-  scans, report errors honestly, and provide sanitized diagnostic export.
-
-### Update distribution foundation
-
-- Add optional public GitHub release checks, opt-in daily scheduling, manual checks,
-  and verified release links.
-- Validate stable numeric versions, same-repository/tag URLs, and runtime ZIP
-  metadata; enforce deadlines, size bounds, and rate-limit cooldowns.
-- Keep release checking independent of reviews and omit JPDB credentials from GitHub traffic.
-- Add runtime ZIP/checksum generation and GitHub CI/draft-release workflows.
-- Document manual unpacked updates and the separate Chrome Web Store route for
-  future browser-managed automatic installation.
-
-Publishing the repository and its first release is a separate deployment step.
+- Acknowledge popup opening immediately, preserve one-owner tab behavior and reject stale actions/late popup replies.
+- Persist pending reviews before their POST and accepted receipts before optional refresh; keep ambiguous results as recoverable, never automatically retry a grade.
+- Scope durable caches and recovery state to the JPDB account fingerprint, survive worker restarts, avoid erroneous learning-card eligibility fallback, and bound network requests.
+- Buffer rapid Reveal/grade input, preserve focus across ChatGPT composer replacement, and add sanitized diagnostics and configurable GitHub release checks.
+- Introduce runtime ZIP/checksum generation and CI/draft-release workflows.
 
 ## 0.3.1 — recovered baseline
 
-Manual launcher, shared review session, popup-local shortcuts, and zero-sized shadow
-host. The recovered package is the starting point for this repair; the identified
-responsiveness and ownership defects are recorded in the qualification evidence.
+- Replace automatic interruptions with a manual `○` launcher and continuous card-by-card review.
+- Add shared cross-tab session ownership and popup-only keyboard shortcuts.
+- Reduce hit-testing conflicts with a zero-sized shadow host and isolate interaction events.
+
+Historical baseline, naming and validation details remain in [docs/history](docs/history/) and the frozen [v0.3.1 compatibility fixture](tests/fixtures/v0.3.1/).
