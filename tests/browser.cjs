@@ -413,7 +413,7 @@ async function run() {
       await neighbor.bringToFront();
       await p.bringToFront();
       assert.equal((await ui(p)).open,true,'switching tabs alone must not close the review');
-      assert.ok(Math.abs((await popupTop()) - topAfterReveal) <= 1,
+      assert.ok(Math.abs((await popupTop()) - afterReveal.top) <= 1,
         'tab activation must not move the open popup');
       await p.locator('.close').click();
       await p.locator('.launcher').click(); await cardReady(p,'犬');
