@@ -394,6 +394,7 @@ async function run() {
         viewportHeight:window.innerHeight,
         launcherTop:el.getRootNode().querySelector('.launcher').getBoundingClientRect().top
       }));
+      const popupTop = async () => (await popupLayout()).top;
       await until(async()=>p.locator('.popup').evaluate(el=>Number.isFinite(
         Number.parseFloat(el.style.top))), 'popup initial placement applied');
       const settlePositionFrame = () => p.locator('.popup').evaluate(
