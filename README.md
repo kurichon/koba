@@ -1,6 +1,6 @@
 # KoBa — Kotoba no Soba
 
-**Version 0.3.4 — first-load progress and diagnostics for larger JPDB collections.**
+**Version 0.3.5 — background review-queue warming and timing diagnostics.**
 
 *ことば、そばに。 — A little Japanese, always close by.*
 
@@ -18,10 +18,10 @@ release or Chrome Web Store listing remains a separate action.
 1. Close any open JPDB review popup.
 2. Copy the files from this project's `extension/` directory into the **same
    directory** currently loaded in Chrome or Brave. Alternatively, extract
-   `dist/KoBa_v0.3.4.zip` into that directory.
+   `dist/KoBa_v0.3.5.zip` into that directory.
 3. Open `chrome://extensions` or `brave://extensions` and click **Reload** on
    the existing KoBa installation.
-4. Verify **0.3.4** in the extension settings. Open ChatGPT and click `○`.
+4. Verify **0.3.5** in the extension settings. Open ChatGPT and click `○`.
    Refresh an existing ChatGPT tab once if its controls do not update.
 
 `manifest.json` must be directly inside the loaded directory. Keep the existing
@@ -78,6 +78,10 @@ deck vocabulary; it does not implement dedicated kanji/component learning.
   Existing unpacked installations should upgrade in place to retain browser storage.
 - This is an independent tool, not affiliated with or endorsed by JPDB or OpenAI.
   The license covers this repository's code, not the external services or their content.
+
+## Changes in 0.3.5
+
+While you have cached review cards available, KoBa can refresh the review queue in the background before the two-minute cache expires. When the queue runs out during a refresh, it uses the existing scan rather than starting a duplicate. Lookups remain sequential and paced; recently accepted grades remain blocked from stale server responses until JPDB confirms a changed schedule. Settings now shows JPDB grade-response, next-card, and background-refresh timings. This optimizes active sessions, not a first cold scan or empty account.
 
 ## Changes in 0.3.4
 
@@ -154,7 +158,7 @@ Exact hot upgrades of an existing unpacked folder remain a manual browser
 acceptance check; headless Chromium may retain an older service worker after
 files are replaced.
 The build emits a runtime-only ZIP and checksum in `dist/`, validating version
-agreement, file membership, and all archive bytes. Add `-- --tag v0.3.4` to enforce
+agreement, file membership, and all archive bytes. Add `-- --tag v0.3.5` to enforce
 the release tag too.
 
 The included GitHub workflows qualify changes and prepare an **unpublished draft**
