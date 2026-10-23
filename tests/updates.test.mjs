@@ -10,7 +10,7 @@ async function environment({ permission = true, fetchImpl, settings } = {}) {
   const data = settings ? {jpdbUpdateSettings:settings} : {};
   const alarms = new Map();
   const calls = [];
-  const env = { data, alarms, calls, permission, version:'0.3.3' };
+  const env = { data, alarms, calls, permission, version:'0.3.4' };
   globalThis.chrome = {
     runtime: {getManifest:() => ({version:env.version}), onStartup:event()},
     storage: {local:{

@@ -436,6 +436,14 @@
       : state.lastOutcome?.status === 'accepted' && Date.now() - state.lastOutcome.at < 5000 ? 'Saved' : '';
 
     reviewEl.classList.toggle('state-hidden', !card);
+    const progress = state.progress;
+    const done = Number(progress?.completed) || 0;
+    const total = Number.isFinite(progress?.total) ? progress.total : null;
+    loadingEl.textContent = progress?.phase === 'vocabulary'
+      ? `Reading JPDB decks: ${done} of ${total ?? '…'}…`
+      : progress?.phase === 'reviews'
+        ? `Checking review eligibility: ${done.toLocaleString()} of ${total?.toLocaleString() ?? '…'} vocabulary entries…`
+        : 'Finding your JPDB decks…';
     loadingEl.classList.toggle('state-hidden', Boolean(card) || !state.loading);
     emptyEl.classList.toggle('state-hidden', Boolean(card) || state.loading || Boolean(state.error || localError || uncertain));
     errorEl.classList.add('state-hidden');
@@ -473,7 +481,7 @@
     pendingPanelSequence = sequence;
     latestIntent = `${instanceId}:${sequence}`;
     localError = null;
-    if (open && !state.card) state = { ...state, loading: true, error: null };
+    if (open && !state.card) state = { ...state, loading: true, progress: null, error: null };
     if (!open) optimisticCard = null;
     setPanelOpenLocal(open, { focus: open });
     render();

@@ -1,3 +1,5 @@
+> **v0.3.4 qualification note:** First-load stage/count progress has been added for cold and large-collection scans, with a controlled multi-deck regression. The historical v0.3.2 and v0.3.3 findings remain relevant; live-user collection size, JPDB availability, and the reason for the reported v0.3.3 stall are not verified. A green CI run does not establish the live-user remediation.
+
 > **Historical v0.3.2 record.** This file preserves the tested repair baseline and its original hashes. The KoBa v0.3.3 naming, MIT packaging, release alias and new test results are recorded separately in [BRANDING_0.3.3.md](BRANDING_0.3.3.md).
 
 # v0.3.2 qualification and repair record

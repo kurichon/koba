@@ -40,7 +40,7 @@ async function installTransport(worker) {
   await worker.evaluate(() => {
     const fixture = globalThis.__jpdbFixture = {
       requests: [], attempts: [], holds: [], holdLookups: false, holdRefresh: false,
-      reviewMode: 'success', failLookup: false, permission: false,
+      reviewMode: 'success', failLookup: false, holdSecondLookup: false, lookupCount: 0, permission: false,
       cards: [
         { vid:101, sid:1, spelling:'猫', reading:'ねこ', meanings:['cat'], card_state:['due'], due_at:1000 },
         { vid:102, sid:1, spelling:'犬', reading:'いぬ', meanings:['dog'], card_state:['due'], due_at:2000 },
@@ -84,7 +84,9 @@ async function installTransport(worker) {
         return new Response(null, {status:204});
       }
       if (url.pathname.endsWith('/lookup-vocabulary')) {
+        fixture.lookupCount++;
         if (fixture.failLookup) return new Response('Temporary service failure', {status:503});
+        if (fixture.holdSecondLookup && fixture.lookupCount === 2) await hold(options.signal);
         if (fixture.holdLookups || (fixture.holdRefresh && fixture.attempts.length)) await hold(options.signal);
         return new Response(JSON.stringify({vocabulary_info:body.list.map(([vid,sid]) => {
           const card = fixture.cards.find(c => c.vid === vid && c.sid === sid);
@@ -154,7 +156,7 @@ async function ui(page) {
   return await page.locator('#ambient-jpdb-host').evaluate(host => {
     const s=host.shadowRoot, popup=s.querySelector('.popup');
     return {open:!popup.classList.contains('hidden'),status:s.querySelector('.status').textContent,
-      word:s.querySelector('.word').textContent,answer:!s.querySelector('.answer').classList.contains('hidden'),
+      word:s.querySelector('.word').textContent,loadingText:s.querySelector('.loading').textContent,answer:!s.querySelector('.answer').classList.contains('hidden'),
       notice:s.querySelector('.notice-text').textContent,
       disabled:[...s.querySelectorAll('[data-grade]')].every(button=>button.disabled),
       updateHidden:s.querySelector('.update-hint').classList.contains('state-hidden')};
@@ -220,6 +222,31 @@ async function run() {
       assert.equal(await a.attempts(),0);
       assert.deepEqual(a.errors,[]);
       return {visibleMs,reviewPosts:0,formerOwnerClosed:true,lateReopen:false};
+    } finally {await a.close();}
+  });
+
+  await runCase('A large first-time scan explains its progress before allowing review', async()=>{
+    const a=await app();
+    try {
+      await a.worker.evaluate(()=>{
+        const f=globalThis.__jpdbFixture;
+        f.cards=Array.from({length:850},(_,i)=>({
+          vid:1000+i, sid:1, spelling:`entry${i}`,reading:'test',meanings:['test'],
+          card_state:['due'],due_at:1000+i
+        }));
+        f.holdSecondLookup=true;
+      });
+      const p=await a.page('long-initial-load');
+      await p.locator('.launcher').click();
+      await until(async()=>/Checking review eligibility: 400 of 850/.test((await ui(p)).loadingText),
+        'first 400-word progress indicator',12000);
+      const view=await ui(p);
+      assert.equal(view.word,'','partially scanned results must not be presented as complete');
+      assert.match(view.loadingText,/400 of 850/);
+      await a.release();
+      await cardReady(p,'entry0');
+      assert.equal(await a.attempts(),0);
+      return {initialProgress:'400/850',reviewPosts:0};
     } finally {await a.close();}
   });
 
