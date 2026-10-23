@@ -881,12 +881,11 @@ async function restoreOpenChatGPTTabs() {
   } catch {}
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
-  const existing = await chrome.storage.local.get(Object.keys(DEFAULTS));
-  const patch = {};
-  for (const [key, value] of Object.entries(DEFAULTS)) if (existing[key] === undefined) patch[key] = value;
-  if (Object.keys(patch).length) await chrome.storage.local.set(patch);
-  await restoreOpenChatGPTTabs();
+chrome.runtime.onInstalled.addListener(() => {
+  // Never write default settings during installation: an asynchronous read of
+  // missing keys can race with a new user's first save and overwrite their key.
+  // Both background and options already apply DEFAULTS when reading storage.
+  void restoreOpenChatGPTTabs();
 });
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
 
@@ -957,4 +956,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 void restoreOpenChatGPTTabs();
 initializeUpdates().catch(() => {});
-
