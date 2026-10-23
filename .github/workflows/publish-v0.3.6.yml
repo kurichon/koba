@@ -1,0 +1,104 @@
+name: Publish KoBa v0.3.6 (one-time)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v0.3.6.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: koba-publish-v0.3.6
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: "${{ github.event.head_commit.message == 'release: publish KoBa v0.3.6' }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact qualified source commit
+        uses: actions/checkout@v6
+        with:
+          ref: 'be5ce2c544e5f05d2f57acb4e719c0a24840b63d'
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Verify qualified source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 'be5ce2c544e5f05d2f57acb4e719c0a24840b63d'
+          node -e "const m=require('./extension/manifest.json');const p=require('./package.json');if(m.version!=='0.3.6'||p.version!=='0.3.6')process.exit(1)"
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build v0.3.6 runtime ZIP
+        run: npm run build -- --tag v0.3.6
+      - name: Run source and state tests
+        run: npm test
+      - name: Install Chromium and dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Exercise actual extension in Chromium
+        run: xvfb-run -a npm run test:browser
+      - name: Verify both assets match passing qualified build
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c SHA256SUMS.txt)
+          EXPECTED='180948881f3159826969d92102cd81f3f9253ff6f1733fe8f371af4261f656d3'
+          ACTUAL="$(sha256sum dist/KoBa_v0.3.6.zip | awk '{print $1}')"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "Release ZIP differs from previously qualified v0.3.6 build" >&2
+            exit 1
+          fi
+          test "$(sha256sum dist/JPDB_Review_Button_for_ChatGPT_v0.3.6.zip | awk '{print $1}')" = "$EXPECTED"
+      - name: Create release tag on qualified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          if git rev-parse -q --verify refs/tags/v0.3.6 >/dev/null; then
+            if [[ "$(git rev-list -n 1 refs/tags/v0.3.6)" != 'be5ce2c544e5f05d2f57acb4e719c0a24840b63d' ]]; then
+              echo "Existing v0.3.6 tag references a different commit" >&2
+              exit 1
+            fi
+          else
+            git tag v0.3.6 'be5ce2c544e5f05d2f57acb4e719c0a24840b63d'
+            git push origin refs/tags/v0.3.6
+          fi
+      - name: Publish stable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v0.3.6 >/dev/null 2>&1; then
+            echo "v0.3.6 release already exists; refusing to overwrite" >&2
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/KOBA_RELEASE_NOTES.md" <<'EOF'
+          ## KoBa v0.3.6 — steady reviews, adjustable launcher
+
+          - **No more Reveal twitch:** keep the review popup's upper edge stable while answers expand, with internal scrolling for small windows.
+          - **Vertical button adjustment:** drag the KoBa launcher up or down or adjust it in **Extension options → Behavior → Button vertical position**.
+          - **Keep the horizontal anchor:** the button stays beside ChatGPT's composer as the layout changes.
+          - **Saved across tabs:** your vertical preference persists within this browser profile and synchronizes across ChatGPT tabs; **Reset to center** restores the original location.
+          - **Existing review behavior preserved:** normal clicks still toggle the popup, and changing tabs alone does not steal the review session.
+          - Includes prior v0.3.5 background queue improvements; JPDB review requests and grade logic were not changed in this release.
+
+          **Upgrade from v0.3.5:** Download `KoBa_v0.3.6.zip`, extract into the **same unpacked extension folder**, reload KoBa in `chrome://extensions` or `brave://extensions`, then refresh ChatGPT. Retaining the existing extension identity keeps browser-local settings and your JPDB key. Do not uninstall the existing extension.
+
+          **Update behavior:** GitHub release checking can notify you of new versions; unpacked Chrome/Brave extensions still require manual installation.
+
+          **Verification:** Source tests, controlled Chromium browser scenarios, and SHA-256 checks of both release ZIPs passed. Validation used simulated JPDB requests; it did not touch your live JPDB account.
+          EOF
+          gh release create v0.3.6 \
+            dist/KoBa_v0.3.6.zip \
+            dist/JPDB_Review_Button_for_ChatGPT_v0.3.6.zip \
+            dist/SHA256SUMS.txt \
+            --verify-tag --title "KoBa v0.3.6" --notes-file "$RUNNER_TEMP/KOBA_RELEASE_NOTES.md" --latest
