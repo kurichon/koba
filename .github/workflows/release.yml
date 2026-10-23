@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag matching manifest version (e.g., v0.3.4)'
+        description: 'Release tag matching manifest version (e.g., v0.3.5)'
         required: true
-        default: 'v0.3.4'
+        default: 'v0.3.5'
         type: string
 
 permissions:
