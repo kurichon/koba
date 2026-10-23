@@ -139,8 +139,22 @@ async function app({ extension = source } = {}) {
       // before Playwright receives the promise result.
       if (!/Target closed|Execution context was destroyed|context.*destroyed|Worker was terminated/i.test(String(error))) throw error;
     }
-    a.worker = await next;
-    await installTransport(a.worker);
+    // Chrome lazily restarts MV3 service workers: open the extension's own
+    // settings page and message its background to wake the replacement.
+    const wake = await context.newPage();
+    try {
+      const url = `chrome-extension://${a.id}/options.html`;
+      for (let attempt = 0; ; attempt++) {
+        try { await wake.goto(url, {waitUntil:'domcontentloaded',timeout:3000}); break; }
+        catch (error) {
+          if (attempt >= 7) throw error;
+          await new Promise(resolve => setTimeout(resolve,200));
+        }
+      }
+      await wake.evaluate(() => chrome.runtime.sendMessage({type:'JPDB_GET_UPDATE_STATUS'}, () => {}));
+      a.worker = await next;
+      await installTransport(a.worker);
+    } finally { await wake.close(); }
   };
   a.close = async () => {
     await context.close(); apps.delete(a); fs.rmSync(profile,{recursive:true,force:true});
