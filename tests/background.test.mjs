@@ -66,7 +66,7 @@ async function boot(data,{fetcher=null,failSet=null,tabs=[]}={}) {
   const chrome={
     runtime:{
       onInstalled:{addListener(fn){installed=fn;}},onStartup:{addListener(){}},
-      onMessage:{addListener(fn){handler=fn;}},getManifest:()=>({version:"0.3.3"}),
+      onMessage:{addListener(fn){handler=fn;}},getManifest:()=>({version:"0.3.4"}),
       openOptionsPage:async()=>{}
     },
     storage:{local:area("local"),session:area("session"),onChanged:{addListener(fn){listeners.push(fn);}}},
@@ -75,7 +75,7 @@ async function boot(data,{fetcher=null,failSet=null,tabs=[]}={}) {
       query:async()=>tabs,
       sendMessage:async(id,message)=>{
         events.push({id,...clone(message)});
-        if(message.type==="JPDB_UI_PROBE") return {ready:true,version:tabs.find(t=>t.id===id)?.version||"0.3.3"};
+        if(message.type==="JPDB_UI_PROBE") return {ready:true,version:tabs.find(t=>t.id===id)?.version||"0.3.4"};
         return {ready:true};
       },
       onRemoved:{addListener(){}}
@@ -180,6 +180,66 @@ await test("onInstalled must not overwrite API key or preferences saved during i
   await flush();
   assert.equal(data.local.apiKey,key,'installer must not blank a newly saved key');
   assert.equal(data.local.enabled,false,'installer must not change an explicit disabled choice');
+  runtime.stop();
+});
+
+await test("missing API key shows an actionable error instead of an indefinite loading state",async()=>{
+  const data=fixture({apiKey:"",fresh:false});
+  const runtime=await boot(data);
+  const result=await open(runtime);
+  assert.equal(result.state.loading,false);
+  assert.equal(result.state.progress,null);
+  assert.equal(result.state.error.code,"NO_API_KEY");
+  assert.equal(runtime.calls.length,0);
+  runtime.stop();
+});
+
+await test("large first-time deck scan reports progress and finishes without selecting unchecked cards",async()=>{
+  const data=fixture({fresh:false});
+  data.local.jpdbReviewCacheV4.vocabIds=[];
+  data.local.jpdbReviewCacheV4.vocabCachedAt=0;
+  data.local.jpdbReviewCacheV4.cards=[];
+  data.local.jpdbReviewCacheV4.statesCachedAt=0;
+  let releaseDeck, releaseBatch, seenLookups=0;
+  const deckGate=new Promise(resolve=>releaseDeck=resolve);
+  const batchGate=new Promise(resolve=>releaseBatch=resolve);
+  const pairs=Array.from({length:850},(_,i)=>[1000+i,0]);
+  const fetcher=async(url,options,normal)=>{
+    const body=options.body?JSON.parse(options.body):{};
+    if(url.endsWith("/list-user-decks")) return http({decks:[[1,"A"],[2,"B"]]});
+    if(url.endsWith("/deck/list-vocabulary")) {
+      if(body.id===2) await deckGate;
+      return http({vocabulary:body.id===1?pairs.slice(0,425):pairs.slice(425)});
+    }
+    if(url.endsWith("/lookup-vocabulary")) {
+      if(++seenLookups===2) await batchGate;
+      return http({vocabulary_info:body.list.map(([vid])=>body.fields.map(field=>({
+        spelling:String(vid),reading:"test",meanings:["test"],card_state:["due"],due_at:1
+      })[field]))});
+    }
+    return normal(url,options);
+  };
+  const runtime=await boot(data,{fetcher});
+  const first=await open(runtime);
+  assert.equal(first.state.loading,true);
+  await until(async()=>{
+    const p=(await runtime.state()).state.progress;
+    return p?.phase==="vocabulary" && p.completed===1 && p.total===2;
+  },"first deck progress");
+  assert.equal((await runtime.state()).state.card,null,"must not expose partially scanned review schedule");
+  releaseDeck();
+  await until(async()=>{
+    const p=(await runtime.state()).state.progress;
+    return p?.phase==="reviews" && p.completed===400 && p.total===850;
+  },"first batch progress");
+  assert.equal((await runtime.state()).state.loading,true);
+  releaseBatch();
+  const final=await ready(runtime);
+  assert.equal(final.loading,false);
+  assert.equal(final.progress,null);
+  assert.equal(final.error,null);
+  assert.equal(final.card.vid,1000);
+  assert.equal(data.local.jpdbReviewCacheV4.vocabIds.length,850);
   runtime.stop();
 });
 
@@ -361,6 +421,7 @@ await test("read deadlines recover while close remains available",async()=>{
   const closed=await runtime.send({type:"JPDB_SET_PANEL_OPEN",open:false,intentId:"timeout-close"});
   assert.equal(closed.open,false);
   assert.equal(closed.state.loading,false);
+  assert.equal(closed.state.progress,null);
   runtime.stop();
 });
 
@@ -400,7 +461,7 @@ await test("failure to persist pre-write journal sends no grade",async()=>{
 });
 
 await test("outdated content scripts are reinjected; matching versions are reused",async()=>{
-  const runtime=await boot(fixture(),{tabs:[{id:1,version:"0.3.1"},{id:2,version:"0.3.3"}]});
+  const runtime=await boot(fixture(),{tabs:[{id:1,version:"0.3.1"},{id:2,version:"0.3.4"}]});
   await flush();
   assert.deepEqual(runtime.scripts.map(item=>item.target.tabId),[1]);
   runtime.stop();
@@ -527,3 +588,4 @@ await test("force sync replaces an ordinary cached-ID scan and rejects its late 
 });
 
 console.log(JSON.stringify({passed:cases.length,cases,environment:"Actual source modules and runtime message interface; isolated simulated Chrome and JPDB; no real account traffic"},null,2));
+

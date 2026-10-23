@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 — 2026-10-23
+
+- Display live first-scan progress across deck enumeration and batched review eligibility checks, rather than leaving the popup indefinitely on a generic loading message.
+- Carry progress through existing background/session messages and surface it in settings and sanitized diagnostics.
+- Clear stale progress on completion, error, and extension-worker restart; preserve card eligibility rules and review submission safeguards.
+- Add controlled large-deck tests and a Chromium fixture for a delayed second lookup batch.
+- First-time scan still needs to read the account's vocabulary; this update improves observability, not a guaranteed cold-sync speedup. Live JPDB account validation remains necessary.
+
 ## 0.3.3 — 2026-10-23
 
 - Adopt **KoBa** as the public product name, from *Kotoba no Soba* (ことばのそば),

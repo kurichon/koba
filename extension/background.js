@@ -210,6 +210,7 @@ async function syncSettings() {
     sharedSession = normalizeReviewSession(storedSession?.scope === accountScope ? storedSession : null);
     sharedSession.revision = Math.max(previousRevision, sharedSession.revision) + 1;
     sharedSession.loading = false;
+    sharedSession.progress = null;
     sharedSession.error = null;
     memory = emptyMemory();
     const cache = data[CACHE_KEY];
@@ -311,6 +312,7 @@ function selectCachedCard() {
 function prepareLoad({ forceVocabulary = false, forceStates = false } = {}) {
   if (!settings.enabled || !settings.apiKey || journal.active) {
     sharedSession.loading = false;
+    sharedSession.progress = null;
     return null;
   }
   if (loadJob) {
@@ -323,18 +325,37 @@ function prepareLoad({ forceVocabulary = false, forceStates = false } = {}) {
   if (!forceVocabulary && !forceStates && cacheFresh()) {
     selectCachedCard();
     sharedSession.loading = false;
+    sharedSession.progress = null;
     sharedSession.error = null;
     return null;
   }
   const job = { id: ++loadSequence, ctx: context(), controller: new AbortController(),
-    forceVocabulary, forceStates, promise: null, started: false,
+    forceVocabulary, forceStates, promise: null, started: false, startedAt: Date.now(), lastProgress: null,
     snapshot: { vocabIds: copy(memory.vocabIds), vocabCachedAt: memory.vocabCachedAt,
       dueAtSupported: forceVocabulary || Date.now() - memory.vocabCachedAt >= VOCAB_CACHE_TTL_MS
         ? null : memory.dueAtSupported } };
   loadJob = job;
   sharedSession.loading = true;
+  sharedSession.progress = { phase: "decks", completed: 0, total: null, startedAt: job.startedAt };
   sharedSession.error = null;
   return job;
+}
+
+async function reportLoadProgress(job, phase, completed, total) {
+  if (loadJob !== job || job.controller.signal.aborted || !current(job.ctx)) return;
+  const now = Date.now();
+  // Every stage change, first batch, and terminal batch is visible. Intermediate
+  // batches are coalesced to avoid repeatedly serializing the entire session.
+  const previous = job.lastProgress;
+  if (previous?.phase === phase && completed !== total && previous.completed > 0 &&
+    now - previous.at < 500) return;
+  job.lastProgress = { phase, completed, total, at: now };
+  await mutate(async () => {
+    if (loadJob !== job || job.controller.signal.aborted || !current(job.ctx)) return;
+    touch({ progress: { phase, completed, total, startedAt: job.startedAt } });
+    await persistSession();
+    publish();
+  });
 }
 
 function launchLoad(job) {
@@ -452,7 +473,7 @@ async function lookupBatch(ctx, ids, includeDueAt, signal) {
   return rowsToCards(ids, data.vocabulary_info, fields);
 }
 
-async function lookupCards(ctx, ids, dueAtSupported, signal) {
+async function lookupCards(ctx, ids, dueAtSupported, signal, onBatch = async () => {}) {
   const cards = [];
   let includeDueAt = dueAtSupported !== false;
   let supported = dueAtSupported;
@@ -469,6 +490,7 @@ async function lookupCards(ctx, ids, dueAtSupported, signal) {
       supported = false;
       cards.push(...await lookupBatch(ctx, batch, false, signal));
     }
+    await onBatch(Math.min(offset + LOOKUP_BATCH_SIZE, ids.length), ids.length);
     if (offset + LOOKUP_BATCH_SIZE < ids.length) await sleep(BATCH_DELAY_MS);
   }
   return { cards, dueAtSupported: supported };
@@ -485,16 +507,19 @@ async function loadVocabularyIds(job) {
   const data = await jpdbRequest(ctx, "/list-user-decks", { fields: ["id", "name"] }, { signal });
   if (!Array.isArray(data?.decks)) throw new RequestError("INVALID_RESPONSE", "JPDB returned an unreadable deck list.", { retryable: true });
   const unique = new Map();
-  for (const deck of data.decks) {
-    const id = Array.isArray(deck) ? deck[0] : null;
-    if (!Number.isFinite(id)) continue;
+  const deckIds = data.decks.map(deck => Array.isArray(deck) ? deck[0] : null)
+    .filter(Number.isFinite);
+  await reportLoadProgress(job, "vocabulary", 0, deckIds.length);
+  for (let index = 0; index < deckIds.length; index++) {
+    const id = deckIds[index];
     const vocabulary = await jpdbRequest(ctx, "/deck/list-vocabulary", { id }, { signal });
     if (!Array.isArray(vocabulary?.vocabulary)) throw new RequestError("INVALID_RESPONSE", "JPDB returned an unreadable vocabulary list.", { retryable: true });
     for (const pair of vocabulary.vocabulary) {
       if (Array.isArray(pair) && Number.isFinite(pair[0]) && Number.isFinite(pair[1])) unique.set(pair[0] + ":" + pair[1], [pair[0], pair[1]]);
     }
     if (signal.aborted) throw new RequestError("CANCELLED", "The request was cancelled.");
-    await sleep(120);
+    await reportLoadProgress(job, "vocabulary", index + 1, deckIds.length);
+    if (index + 1 < deckIds.length) await sleep(120);
   }
   return { ids: [...unique.values()], fetchedAt: now };
 }
@@ -508,7 +533,9 @@ function releaseChangedQuarantines(cards) {
 async function runLoad(job) {
   try {
     const vocabulary = await loadVocabularyIds(job);
-    const result = await lookupCards(job.ctx, vocabulary.ids, job.snapshot.dueAtSupported, job.controller.signal);
+    await reportLoadProgress(job, "reviews", 0, vocabulary.ids.length);
+    const result = await lookupCards(job.ctx, vocabulary.ids, job.snapshot.dueAtSupported,
+      job.controller.signal, (completed, total) => reportLoadProgress(job, "reviews", completed, total));
     await mutate(async () => {
       if (!current(job.ctx) || loadJob !== job || job.controller.signal.aborted) return;
       memory.vocabIds = vocabulary.ids;
@@ -521,7 +548,7 @@ async function runLoad(job) {
       memory.lastError = null;
       releaseChangedQuarantines(result.cards);
       selectCachedCard();
-      touch({ loading: false, error: null });
+      touch({ loading: false, progress: null, error: null });
       await persistAccount({ cache: true, recovery: true });
       await persistSession();
       loadJob = null;
@@ -533,7 +560,7 @@ async function runLoad(job) {
       if (!current(job.ctx) || loadJob !== job || job.controller.signal.aborted) return;
       loadJob = null;
       memory.lastError = error.message;
-      touch({ loading: false, error: publicError(error) });
+      touch({ loading: false, progress: null, error: publicError(error) });
       await persistSession().catch(() => {});
       await saveDiagnostics();
       publish();

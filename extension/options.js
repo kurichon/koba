@@ -126,6 +126,9 @@ async function copyDiagnostics() {
       panelRevision: safeNumber(runtime.panel?.revision),
       sessionRevision: safeNumber(runtime.session?.revision),
       sessionLoading: typeof runtime.session?.loading === "boolean" ? runtime.session.loading : null,
+      loadPhase: safeCode(runtime.session?.progress?.phase),
+      loadCompleted: safeNumber(runtime.session?.progress?.completed),
+      loadTotal: safeNumber(runtime.session?.progress?.total),
       hasCurrentCard: Boolean(runtime.session?.card),
       recoveryCount: safeNumber(runtime.session?.recoveryCount ?? diag.recoveryCount),
       submissionStatus: safeCode(runtime.session?.submission?.status),
@@ -162,7 +165,17 @@ function renderDiagnostics(diag) {
   $("diagError").textContent = diag.lastError || "—";
 }
 
+function progressText(progress) {
+  if (!progress || !["decks", "vocabulary", "reviews"].includes(progress.phase)) return "—";
+  if (progress.phase === "decks") return "Retrieving JPDB deck list…";
+  const completed = Math.max(0, Number(progress.completed) || 0);
+  const total = Number.isFinite(progress.total) ? progress.total : "…";
+  return progress.phase === "vocabulary" ? `Deck vocabulary: ${completed} / ${total}` :
+    `Review eligibility: ${completed.toLocaleString()} / ${typeof total === "number" ? total.toLocaleString() : total} entries`;
+}
+
 function renderRuntimeResult(result) {
+    $("diagProgress").textContent = result.session?.loading ? progressText(result.session?.progress) : "—";
     $("diagOpenTab").textContent = result.panel?.openTabId ?? "none";
     $("diagPanelRevision").textContent = result.panel?.revision ?? 0;
     $("diagSessionRevision").textContent = result.session?.revision ?? 0;
@@ -290,6 +303,10 @@ $("sync").addEventListener("click", async () => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "session" && changes.sharedReviewSessionV3) {
     latestSession = changes.sharedReviewSessionV3.newValue || null;
+    $("diagProgress").textContent = latestSession?.loading ? progressText(latestSession.progress) : "—";
+    if (syncAttempt && !syncAttempt.starting && latestSession?.loading) {
+      $("status").textContent = `Syncing… ${progressText(latestSession.progress)}`;
+    }
     if (latestSession && !latestSession.loading && latestSession.revision >= (syncAttempt?.revision || 0)) void finishSyncIfReady();
   }
   if (area === "local" && changes.diagnostics) {
