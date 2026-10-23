@@ -146,6 +146,9 @@ npm run build
 
 Browser tests use the actual extension in a disposable profile, a controlled
 ChatGPT layout, and fake JPDB/GitHub transport. They never submit a real review.
+Exact hot upgrades of an existing unpacked folder remain a manual browser
+acceptance check; headless Chromium may retain an older service worker after
+files are replaced.
 The build emits a runtime-only ZIP and checksum in `dist/`, validating version
 agreement, file membership, and all archive bytes. Add `-- --tag v0.3.3` to enforce
 the release tag too.
