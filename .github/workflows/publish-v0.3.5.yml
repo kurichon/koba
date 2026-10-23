@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.event.head_commit.message == 'release: publish KoBa v0.3.5'
+    if: "${{ github.event.head_commit.message == 'release: publish KoBa v0.3.5' }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
