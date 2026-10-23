@@ -18,9 +18,15 @@ This is an evidence register, not a statement that every user environment was te
 | Large collection | Delayed second lookup displays stage/progress counts instead of unbounded generic loading. |
 | Reviews and recovery | One grade POST per accepted input; safe journal handling after interrupted writes or worker restarts; no duplicate auto-retry. |
 | Queue warming | Cached review remains interactive while refresh is deliberately held; stale responses do not restore recently graded cards. |
-| Popup stability | Reveal maintains a stationary top edge after an answer expands; switching tabs alone does not move the panel. |
+| Popup stability | Controlled passing browser runs held the popup's top edge during Reveal and tab switching; see the intermittent CI observation below. |
 | Launcher vertical position | Drag, saved setting, cross-tab synchronization, Settings slider and reset preserve the composer-based horizontal anchor. |
 | Updates and diagnostics | Optional GitHub release permission/validation and sanitized diagnostics are exercised with controlled responses. |
+
+## Intermittent CI observation (tracked)
+
+Following the documentation-only [PR #5](https://github.com/kurichon/koba/pull/5), the first [main-branch CI run (attempt 1)](https://github.com/kurichon/koba/actions/runs/39923016817/attempts/1) measured a **15 px Reveal-related popup shift** in its Chromium fixture; [attempt 2](https://github.com/kurichon/koba/actions/runs/39923016817/attempts/2) passed the same seven browser scenarios. The v0.3.6 runtime source blobs and packaged SHA-256 were **identical** to the prior qualified release, so the documentation edit did not cause this difference.
+
+Whether the test measured before initial layout had settled or an actual intermittent popup movement remains **unverified**. The detailed reproduction and acceptance criteria are tracked in [issue #6](https://github.com/kurichon/koba/issues/6). Do not claim that every long-idle or live-browser twitch case has been eliminated solely because CI reruns pass.
 
 ## Not verified by the automated environment
 
