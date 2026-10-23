@@ -75,7 +75,7 @@ Each ZIP contains only the explicitly reviewed runtime files and the MIT license
 
 The public source repository is `kurichon/koba`. Verify CI passes on the default branch before preparing a draft release.
 
-The CI workflow runs on pull requests, updates to `main` or `master`, and manual dispatch. It installs locked dependencies, runs the state/update tests, exercises the extension in Chromium, and validates the runtime package. The release workflow runs when a `v*` tag is pushed **or** through Actions → Prepare draft release → Run workflow. For the manual action, enter the matching tag (for example `v0.3.3`); the workflow creates the tag **only after** qualification succeeds. Both routes require the tag to match the manifest version exactly and prepare a **draft** release containing the runtime ZIP and checksum file.
+The CI workflow runs on pull requests, updates to `main` or `master`, and manual dispatch. Exact in-place hot upgrades remain a manual browser check because headless Chromium may reuse a cached service worker after files are replaced. It installs locked dependencies, runs the state/update tests, exercises the extension in Chromium, and validates the runtime package. The release workflow runs when a `v*` tag is pushed **or** through Actions → Prepare draft release → Run workflow. For the manual action, enter the matching tag (for example `v0.3.3`); the workflow creates the tag **only after** qualification succeeds. Both routes require the tag to match the manifest version exactly and prepare a **draft** release containing the runtime ZIP and checksum file.
 
 For each future release:
 
