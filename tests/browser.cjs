@@ -252,6 +252,53 @@ async function run() {
     } finally {await a.close();}
   });
 
+  await runCase('Warm refresh stays off the review critical path while the next card advances', async()=>{
+    const a=await app();
+    try {
+      const p=await a.page('warm-prefetch');
+      await p.locator('.launcher').click();
+      await cardReady(p,'猫');
+      await a.configure({holdLookups:true});
+      // Advance the service worker's notion of cache age without waiting 70s.
+      await a.worker.evaluate(()=>{
+        const original = Date.now.bind(Date);
+        Date.now=()=>original()+90_000;
+      });
+      await p.locator('.reveal').click();
+      await until(()=>a.worker.evaluate(()=>globalThis.__jpdbFixture.holds.length>0),'held warm lookup');
+      const before=await ui(p);
+      assert.equal(before.word,'猫');
+      assert.equal(before.disabled,false,'prefetch must not disable grading');
+      await p.locator('[data-grade="okay"]').click();
+      await cardReady(p,'犬');
+      assert.equal(await a.attempts(),1);
+      assert.equal((await ui(p)).open,true);
+      await a.release();
+      await until(()=>a.worker.evaluate(async()=>{
+        const data=await chrome.storage.local.get('diagnostics');
+        return data.diagnostics?.warmRefreshes===1;
+      }),'warm result committed');
+      assert.equal((await ui(p)).word,'犬');
+      const options=await a.context.newPage();
+      await options.goto(`chrome-extension://${a.id}/options.html`);
+      // Force the same safe manual-copy fallback already exercised elsewhere;
+      // a working clipboard intentionally keeps the export field hidden.
+      await options.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{
+        configurable:true,value:{writeText:async()=>{throw new Error('denied');}}
+      });});
+      await options.locator('#diagCopy').click();
+      await options.locator('#diagnosticExport').waitFor({state:'visible'});
+      const report=JSON.parse(await options.locator('#diagnosticExport').inputValue());
+      assert.equal(report.warmRefreshes,1);
+      assert.equal(report.warmFailures,0);
+      assert.equal(typeof report.lastGradeRequestMs,'number');
+      assert.equal(typeof report.lastAdvanceMs,'number');
+      assert.ok(!JSON.stringify(report).includes(fakeKey),'diagnostics must exclude API key');
+      assert.deepEqual(a.errors,[]);
+      return {warmRequestsHeld:true,nextCardUnblocked:true,reviewPosts:1};
+    } finally { await a.close(); }
+  });
+
   await runCase('Accepted review advances during slow refresh; keyboard, focus, and layout recover',async()=>{
     const a=await app();
     try {

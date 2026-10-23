@@ -13,6 +13,13 @@ const LOOKUP_BATCH_SIZE = 400;
 const BATCH_DELAY_MS = 350;
 const MAX_CACHED_CARDS = 1000;
 const MAX_QUARANTINES = 32;
+const MAX_RECENT_GRADES = 64;
+// Refresh before the 2-minute cache expires, but only while the user is active.
+// Keep this at one sequential JPDB scan, never parallel/burst lookups.
+const WARM_REFRESH_AGE_MS = 70_000;
+const WARM_LOW_QUEUE_AGE_MS = 20_000;
+const WARM_LOW_QUEUE_SIZE = 4;
+const WARM_REFRESH_COOLDOWN_MS = 60_000;
 const SHARED_SESSION_KEY = "sharedReviewSessionV3";
 const PANEL_STATE_KEY = "reviewPanelV3";
 const CACHE_KEY = "jpdbReviewCacheV4";
@@ -31,6 +38,8 @@ let journal = { active: null, quarantines: [], lastOutcome: null };
 let memory = emptyMemory();
 let mutationQueue = Promise.resolve();
 let loadJob = null;
+let warmJob = null;
+let lastWarmStartedAt = 0;
 let loadSequence = 0;
 let reconcileJob = null;
 const activeControllers = new Set();
@@ -39,7 +48,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function emptyMemory() {
   return { vocabIds: [], vocabCachedAt: 0, cards: [], statesCachedAt: 0,
-    dueAtSupported: null, truncated: false, needsRefill: false, lastError: null };
+    dueAtSupported: null, truncated: false, needsRefill: false, lastError: null,
+    recentGrades: [], lastGradeRequestMs: null, lastAdvanceMs: null,
+    lastWarmRefreshMs: null, lastForegroundMs: null, warmRefreshes: 0, warmFailures: 0 };
 }
 
 class RequestError extends Error {
@@ -144,7 +155,8 @@ function cachedValue() {
     cards: memory.cards.slice(0, MAX_CACHED_CARDS), statesCachedAt: memory.statesCachedAt,
     dueAtSupported: memory.dueAtSupported,
     truncated: memory.truncated || memory.cards.length > MAX_CACHED_CARDS,
-    needsRefill: memory.needsRefill
+    needsRefill: memory.needsRefill,
+    recentGrades: memory.recentGrades.slice(-MAX_RECENT_GRADES)
   };
 }
 
@@ -174,7 +186,14 @@ async function saveDiagnostics() {
       dueAtSupported: memory.dueAtSupported,
       lastError: memory.lastError,
       recoveryCount: journal.quarantines.length,
-      submissionStatus: journal.active?.status || null
+      submissionStatus: journal.active?.status || null,
+      warmRefreshActive: Boolean(warmJob),
+      lastGradeRequestMs: memory.lastGradeRequestMs,
+      lastAdvanceMs: memory.lastAdvanceMs,
+      lastWarmRefreshMs: memory.lastWarmRefreshMs,
+      lastForegroundMs: memory.lastForegroundMs,
+      warmRefreshes: memory.warmRefreshes,
+      warmFailures: memory.warmFailures
     } });
   } catch {}
 }
@@ -183,6 +202,11 @@ function cancelLoad() {
   if (loadJob) loadJob.controller.abort();
   loadJob = null;
   loadSequence++;
+}
+
+function cancelWarmRefresh() {
+  if (warmJob) warmJob.controller.abort();
+  warmJob = null;
 }
 
 async function syncSettings() {
@@ -199,6 +223,8 @@ async function syncSettings() {
     const previousOwner = panelState.openTabId;
     accountGeneration++;
     cancelLoad();
+    cancelWarmRefresh();
+    lastWarmStartedAt = 0;
     if (reconcileJob) reconcileJob.controller.abort();
     reconcileJob = null;
     for (const controller of activeControllers) controller.abort();
@@ -222,6 +248,9 @@ async function syncSettings() {
       memory.dueAtSupported = typeof cache.dueAtSupported === "boolean" ? cache.dueAtSupported : null;
       memory.truncated = Boolean(cache.truncated);
       memory.needsRefill = Boolean(cache.needsRefill);
+      memory.recentGrades = Array.isArray(cache.recentGrades) ? cache.recentGrades
+        .filter(item => validCard(item?.card) && Number.isFinite(item?.acceptedAt))
+        .slice(-MAX_RECENT_GRADES) : [];
     }
     const saved = data[journalKey()];
     journal = {
@@ -252,6 +281,7 @@ async function syncSettings() {
     if (!next.enabled) {
       const previousOwner = panelState.openTabId;
       cancelLoad();
+      cancelWarmRefresh();
       panelState = { ...panelState, openTabId: null, revision: panelState.revision + 1 };
       touch({ loading: false, revealed: false,
         error: { code: "DISABLED", message: "JPDB reviews are disabled in settings.", retryable: false } });
@@ -282,6 +312,28 @@ function requireEnabled() {
 
 function validCard(card) {
   return Number.isFinite(card?.vid) && Number.isFinite(card?.sid);
+}
+
+function recentGradeCard(card) {
+  return { vid: card.vid, sid: card.sid,
+    card_state: Array.isArray(card.card_state) ? card.card_state.slice(0, 4) : [],
+    due_at: card.due_at ?? null };
+}
+
+function acceptRecentlyGraded(card) {
+  memory.recentGrades = memory.recentGrades.filter(entry => cardKey(entry.card) !== cardKey(card));
+  memory.recentGrades.push({ card: recentGradeCard(card), acceptedAt: Date.now() });
+  memory.recentGrades = memory.recentGrades.slice(-MAX_RECENT_GRADES);
+}
+
+// A newly accepted grade can be visible as "due" in an eventually consistent
+// lookup. Only an authoritative change in card state or due_at may release it.
+function applyVerifiedRecentGrades(cards) {
+  const byKey = new Map(cards.map(card => [cardKey(card), card]));
+  memory.recentGrades = memory.recentGrades.filter(entry =>
+    !hasAuthoritativeCardChange(entry.card, byKey.get(cardKey(entry.card))));
+  const blocked = new Set(memory.recentGrades.map(entry => cardKey(entry.card)));
+  return cards.filter(card => !blocked.has(cardKey(card)));
 }
 
 function eligibleCards() {
@@ -322,6 +374,18 @@ function prepareLoad({ forceVocabulary = false, forceStates = false } = {}) {
     // is rejected by the existing job-identity guard in runLoad.
     cancelLoad();
   }
+  if (warmJob && !forceVocabulary) {
+    // Reuse the already-running complete read instead of sending the same
+    // request sequence again when the visible queue is exhausted.
+    if (!cacheFresh() || forceStates || !sharedSession.card) {
+      warmJob.promoted = true;
+      sharedSession.loading = true;
+      sharedSession.progress = { phase: "reviews", completed: warmJob.completed,
+        total: warmJob.ids.length, startedAt: warmJob.startedAt };
+    }
+    return warmJob;
+  }
+  if (warmJob) cancelWarmRefresh();
   if (!forceVocabulary && !forceStates && cacheFresh()) {
     selectCachedCard();
     sharedSession.loading = false;
@@ -339,6 +403,83 @@ function prepareLoad({ forceVocabulary = false, forceStates = false } = {}) {
   sharedSession.progress = { phase: "decks", completed: 0, total: null, startedAt: job.startedAt };
   sharedSession.error = null;
   return job;
+}
+
+function maybeWarmRefresh() {
+  if (warmJob || loadJob || !settings?.enabled || !settings.apiKey ||
+    journal.active || panelState.openTabId === null || !sharedSession.card ||
+    !memory.vocabIds.length || !memory.statesCachedAt || memory.needsRefill) return;
+  // Once the deck-ID inventory expires, the next authoritative foreground
+  // refresh must reload deck membership instead of repeatedly warming old IDs.
+  if (Date.now() - memory.vocabCachedAt >= VOCAB_CACHE_TTL_MS) return;
+  const age = Date.now() - memory.statesCachedAt;
+  const lowQueue = eligibleCards().length <= WARM_LOW_QUEUE_SIZE;
+  if (age < WARM_REFRESH_AGE_MS && !(lowQueue && age >= WARM_LOW_QUEUE_AGE_MS)) return;
+  if (Date.now() - lastWarmStartedAt < WARM_REFRESH_COOLDOWN_MS) return;
+  const job = { ctx: context(), controller: new AbortController(), startedAt: Date.now(),
+    ids: copy(memory.vocabIds), dueAtSupported: memory.dueAtSupported,
+    completed: 0, promoted: false, started: true, promise: null };
+  warmJob = job;
+  lastWarmStartedAt = job.startedAt;
+  job.promise = runWarmRefresh(job);
+}
+
+async function runWarmRefresh(job) {
+  try {
+    const result = await lookupCards(job.ctx, job.ids, job.dueAtSupported, job.controller.signal,
+      async completed => {
+        job.completed = completed;
+        if (!job.promoted || warmJob !== job) return;
+        await mutate(async () => {
+          if (warmJob !== job || !current(job.ctx) || job.controller.signal.aborted) return;
+          touch({ progress: { phase: "reviews", completed, total: job.ids.length,
+            startedAt: job.startedAt } });
+          await persistSession();
+          publish();
+        });
+      });
+    await mutate(async () => {
+      if (warmJob !== job || !current(job.ctx) || job.controller.signal.aborted) return;
+      const previous = JSON.stringify(sharedSession.card);
+      const old = { cards: memory.cards, recentGrades: memory.recentGrades,
+        statesCachedAt: memory.statesCachedAt, dueAtSupported: memory.dueAtSupported,
+        needsRefill: memory.needsRefill, truncated: memory.truncated };
+      memory.cards = sortReviewableCards(applyVerifiedRecentGrades(result.cards));
+      memory.statesCachedAt = Date.now();
+      memory.dueAtSupported = result.dueAtSupported;
+      memory.needsRefill = false;
+      memory.truncated = false;
+      try { await persistAccount({ cache: true, recovery: true }); }
+      catch (error) { Object.assign(memory, old); throw error; }
+      memory.lastWarmRefreshMs = Date.now() - job.startedAt;
+      memory.warmRefreshes++;
+      if (!journal.active) selectCachedCard();
+      // A refresh in the background must not invalidate an in-progress Reveal
+      // or grade merely because it finished another batch of JPDB reads.
+      if (job.promoted || JSON.stringify(sharedSession.card) !== previous) {
+        touch({ loading: false, progress: null, error: null });
+        await persistSession();
+        publish();
+      }
+      warmJob = null;
+      await saveDiagnostics();
+    });
+  } catch (error) {
+    await mutate(async () => {
+      if (warmJob !== job || !current(job.ctx)) return;
+      warmJob = null;
+      if (job.controller.signal.aborted) return;
+      memory.warmFailures++;
+      memory.lastWarmRefreshMs = Date.now() - job.startedAt;
+      if (job.promoted) {
+        memory.lastError = error.message;
+        touch({ loading: false, progress: null, error: publicError(error) });
+        await persistSession().catch(() => {});
+        publish();
+      }
+      await saveDiagnostics();
+    }).catch(() => {});
+  }
 }
 
 async function reportLoadProgress(job, phase, completed, total) {
@@ -540,12 +681,13 @@ async function runLoad(job) {
       if (!current(job.ctx) || loadJob !== job || job.controller.signal.aborted) return;
       memory.vocabIds = vocabulary.ids;
       memory.vocabCachedAt = vocabulary.fetchedAt;
-      memory.cards = sortReviewableCards(result.cards);
+      memory.cards = sortReviewableCards(applyVerifiedRecentGrades(result.cards));
       memory.statesCachedAt = Date.now();
       memory.dueAtSupported = result.dueAtSupported;
       memory.truncated = false;
       memory.needsRefill = false;
       memory.lastError = null;
+      memory.lastForegroundMs = Date.now() - job.startedAt;
       releaseChangedQuarantines(result.cards);
       selectCachedCard();
       touch({ loading: false, progress: null, error: null });
@@ -588,8 +730,9 @@ async function setPanelOpen(message, sender) {
       if (!settings.apiKey) sharedSession.error = { code: "NO_API_KEY", message: "Add your JPDB API key in settings.", retryable: false };
       else if (!settings.enabled) sharedSession.error = { code: "DISABLED", message: "JPDB reviews are disabled in settings.", retryable: false };
       else job = prepareLoad();
-    } else if (previousOwner === tabId && sharedSession.revealed) {
-      sharedSession.revealed = false;
+    } else if (previousOwner === tabId) {
+      if (!warmJob?.promoted) cancelWarmRefresh();
+      if (sharedSession.revealed) sharedSession.revealed = false;
     }
     touch();
     await persistPanel();
@@ -599,6 +742,7 @@ async function setPanelOpen(message, sender) {
     return snapshot(tabId);
   });
   launchLoad(job);
+  maybeWarmRefresh();
   return reply;
 }
 
@@ -644,12 +788,13 @@ async function getPanelState(sender) {
     return snapshot(tabId);
   });
   launchLoad(job);
+  maybeWarmRefresh();
   return reply;
 }
 
 async function reveal(message, sender) {
   const tabId = requireTab(sender);
-  return await mutate(async () => {
+  const result = await mutate(async () => {
     requireEnabled();
     requireOwner(tabId);
     if (journal.active || sharedSession.loading || sharedSession.error) return snapshot(tabId);
@@ -663,6 +808,8 @@ async function reveal(message, sender) {
     }
     return snapshot(tabId);
   });
+  maybeWarmRefresh();
+  return result;
 }
 
 async function submitReview(message, sender) {
@@ -704,14 +851,17 @@ async function submitReview(message, sender) {
 async function runReview(work) {
   let accepted = false;
   let durablyCommitted = false;
+  const startedAt = Date.now();
   try {
     await jpdbRequest(work.ctx, "/review", { vid: work.attempt.card.vid, sid: work.attempt.card.sid,
       grade: work.attempt.grade }, { write: true });
     accepted = true;
+    const requestMs = Date.now() - startedAt;
     let job;
     await mutate(async () => {
       if (!current(work.ctx) || journal.active?.attemptId !== work.attempt.attemptId) return;
       memory.cards = memory.cards.filter(card => cardKey(card) !== cardKey(work.attempt.card));
+      acceptRecentlyGraded(work.attempt.card);
       memory.needsRefill = eligibleCards().length === 0;
       journal.lastOutcome = { status: "accepted", attemptId: work.attempt.attemptId, at: Date.now(),
         cardKey: cardKey(work.attempt.card), sessionRevision: sharedSession.revision };
@@ -722,15 +872,18 @@ async function runReview(work) {
       // selecting another card or doing any optional network work.
       await persistAccount({ recovery: true, cache: true });
       durablyCommitted = true;
+      memory.lastGradeRequestMs = requestMs;
       selectCachedCard();
       if (!sharedSession.card) job = prepareLoad({ forceStates: memory.needsRefill });
       touch({ error: null });
+      memory.lastAdvanceMs = Date.now() - startedAt;
       await persistSession();
       await saveDiagnostics();
       publish();
       void logEvent(ACTION_LOG_KEY, "review-accepted", { attemptId: work.attempt.attemptId });
     });
     launchLoad(job);
+    maybeWarmRefresh();
     // Post-grade learning/failed-state refresh is optional and cannot hold the
     // accepted grade, next card, or ownership controls hostage.
     if (!job) void refreshReviewedCard(work);
@@ -777,7 +930,7 @@ async function refreshReviewedCard(work) {
       if (!current(work.ctx) || journal.active || loadJob) return;
       const refreshed = result.cards[0];
       memory.cards = memory.cards.filter(card => cardKey(card) !== cardKey(work.attempt.card));
-      memory.cards = sortReviewableCards([...memory.cards, refreshed]);
+      memory.cards = sortReviewableCards([...memory.cards, ...applyVerifiedRecentGrades([refreshed])]);
       memory.dueAtSupported = result.dueAtSupported;
       await persistAccount({ cache: true });
     });
@@ -933,6 +1086,7 @@ chrome.tabs.onRemoved.addListener(tabId => {
     const previousOwner = panelState.openTabId;
     delete panelState.intents[tabId];
     if (previousOwner === tabId) {
+      if (!warmJob?.promoted) cancelWarmRefresh();
       panelState = { ...panelState, openTabId: null, revision: panelState.revision + 1 };
       touch({ revealed: false });
       await persistSession();
@@ -966,6 +1120,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const logs = await chrome.storage.session.get([ACTION_LOG_KEY, PANEL_LOG_KEY]);
           return { ...snapshot(sender?.tab?.id), panel: copy(panelState), session: publicSharedSession(),
             eligibleCount: eligibleCards().length,
+            warmRefreshActive: Boolean(warmJob),
             actionEvents: logs[ACTION_LOG_KEY] || [], panelEvents: logs[PANEL_LOG_KEY] || [] };
         });
       // Thin adapters for tabs still running the previous injected script.

@@ -1,4 +1,4 @@
-# KoBa (Kotoba no Soba) v0.3.4
+# KoBa (Kotoba no Soba) v0.3.5
 
 ことば、そばに。 — A little Japanese, always close by.
 
@@ -12,7 +12,7 @@ instructions, and qualification evidence are in the project root.
 2. Copy these runtime files into the **same folder** already loaded by your
    browser. Keep the existing extension installed.
 3. Open `chrome://extensions` or `brave://extensions` and click **Reload** on
-   KoBa. The version should now be **0.3.4**.
+   KoBa. The version should now be **0.3.5**.
 4. Open ChatGPT and click the small `○` launcher. If an old tab does not refresh
    its controls automatically, refresh that tab once.
 
@@ -40,3 +40,7 @@ files and reloading remains manual. It never installs code from GitHub.
 ## First-load troubleshooting
 
 The popup reports progress while reading your decks and checking review eligibility. Large first-time scans can take longer than warm sessions. If no progress appears, open **Extension options** and click **Test connection**, then copy sanitized diagnostics. The JPDB API key remains in browser-local extension storage and is not included in the ZIP.
+
+## Review latency
+
+After a cold scan, KoBa can revalidate a cached review queue in the background while you keep grading. It remains sequential, and a first-ever scan or an empty queue may still require a foreground wait. **Extension options → Diagnostics** shows the last API grade-response, card transition, and warm refresh durations. No review writes are retried automatically.

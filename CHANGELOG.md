@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.5 — 2026-10-23
+
+- Keep an account-scoped, cached review queue playable while a **sequential warm refresh** runs outside the review interaction path. Prefetch is triggered by activity when cached states are approaching their two-minute freshness limit, or when the queue is small and old enough to warrant replenishment.
+- Reuse a warm scan as the foreground refill if the queue runs out while it is still underway, instead of making another identical scan. Cancel background work on account switch, explicit full sync, or popup dismissal. Respect a minimum refresh interval; no burst or parallel JPDB lookups and no automatic review-POST retries.
+- Retain up to 64 recently accepted card/schedule markers across worker restarts, withholding a graded card from stale or eventually consistent lookup responses until JPDB confirms a new card state or schedule. Existing due/learning/failed filters and recovery/quarantine semantics are unchanged.
+- Add privacy-safe timing counters for last JPDB grade response, grade-to-next-card transition, and background refresh, exposed in options and copied diagnostics without keys or vocabulary text.
+- Add deterministic background regressions for overlapping grade/prefetch, stale server responses, queue exhaustion, retry bounds, and account recovery, and a Chromium scenario for a deliberately stalled warm refresh.
+- A genuinely cold initial scan still needs to enumerate JPDB decks and vocabulary. Performance improvements are workload-dependent; real-browser/JPDB latency requires separate confirmation.
+
 ## 0.3.4 — 2026-10-23
 
 - Display live first-scan progress across deck enumeration and batched review eligibility checks, rather than leaving the popup indefinitely on a generic loading message.
