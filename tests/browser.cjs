@@ -20,6 +20,7 @@ form{position:fixed;left:300px;bottom:35px;width:620px;height:90px}textarea{widt
 <form><textarea id="prompt-textarea" aria-label="Message"></textarea></form></main></body></html>`;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const results = [];
+const skippedScenarios = [];
 const apps = new Set();
 let browserVersion;
 fs.mkdirSync(output, { recursive: true });
@@ -327,7 +328,7 @@ async function run() {
     } finally {await a.close();}
   });
 
-  if (fs.existsSync(upgradeFrom)) {
+  if (fs.existsSync(upgradeFrom) && process.env.JPDB_TEST_UPGRADE === '1') {
     await runCase('Same-folder v0.3.1 upgrade preserves settings across a browser relaunch',async()=>{
       const folder=fs.mkdtempSync(path.join(os.tmpdir(),'jpdb-upgrade-source-'));
       fs.cpSync(upgradeFrom,folder,{recursive:true});
@@ -358,6 +359,10 @@ async function run() {
           existingTabHotReinjection:'not tested in headless CI'};
       } finally {await a.close();fs.rmSync(folder,{recursive:true,force:true});}
     });
+  } else if (fs.existsSync(upgradeFrom)) {
+    const reason = 'Requires a real supported extension reload; headless Chromium may cache the previous service worker across a folder replacement';
+    skippedScenarios.push({name:'Same-folder v0.3.1 upgrade',reason});
+    console.log('SKIP Same-folder v0.3.1 upgrade: ' + reason);
   }
 }
 
@@ -366,7 +371,7 @@ run().then(()=>{
     .sort().map(name=>[name,createHash('sha256').update(fs.readFileSync(path.join(source,name))).digest('hex')]));
   const report={candidate:manifest.version,source,executedAt:new Date().toISOString(),
     browserVersion,browserExecutable:process.env.JPDB_TEST_EXECUTABLE || chromium.executablePath(),method:'Actual unpacked MV3 extension; isolated profile; controlled ChatGPT layout and fake JPDB/GitHub transport',
-    limits:['No live JPDB or ChatGPT account','No installed Chrome/Brave user-profile test','Native optional-permission prompt simulated'],runtimeFiles,results};
+    limits:['No live JPDB or ChatGPT account','No installed Chrome/Brave user-profile test','Native optional-permission prompt simulated','Exact hot extension upgrade is an opt-in live-browser gate'],runtimeFiles,results,skippedScenarios};
   fs.writeFileSync(path.join(output,'browser-results.json'),JSON.stringify(report,null,2)+'\n');
   console.log(`${results.length} browser scenarios passed.`);
 }).catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{
