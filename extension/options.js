@@ -118,6 +118,13 @@ async function copyDiagnostics() {
       vocabularyCount: safeNumber(diag.vocabularyCount),
       eligibleCount: safeNumber(diag.eligibleCount),
       lastSync: safeNumber(diag.lastSync),
+      warmRefreshActive: Boolean(runtime.warmRefreshActive),
+      warmRefreshes: safeNumber(diag.warmRefreshes),
+      warmFailures: safeNumber(diag.warmFailures),
+      lastGradeRequestMs: safeNumber(diag.lastGradeRequestMs),
+      lastAdvanceMs: safeNumber(diag.lastAdvanceMs),
+      lastWarmRefreshMs: safeNumber(diag.lastWarmRefreshMs),
+      lastForegroundMs: safeNumber(diag.lastForegroundMs),
       dueAtSupported: typeof diag.dueAtSupported === "boolean" ? diag.dueAtSupported : null,
       lastErrorPresent: Boolean(diag.lastError || runtime.session?.error),
       lastErrorCode: safeCode(runtime.session?.error?.code) || safeCode(diag.errorCode),
@@ -161,6 +168,11 @@ function renderDiagnostics(diag) {
   $("diagVocab").textContent = diag.vocabularyCount ?? "—";
   $("diagEligible").textContent = diag.eligibleCount ?? "—";
   $("diagSync").textContent = diag.lastSync ? new Date(diag.lastSync).toLocaleString() : "—";
+  $("diagWarm").textContent = `${Number(diag.warmRefreshes)||0} completed · ${Number(diag.warmFailures)||0} failed`;
+  const ms = value => Number.isFinite(value) && value >= 0 ? `${Math.round(value)} ms` : "—";
+  $("diagGradeMs").textContent = ms(diag.lastGradeRequestMs);
+  $("diagAdvanceMs").textContent = ms(diag.lastAdvanceMs);
+  $("diagWarmMs").textContent = ms(diag.lastWarmRefreshMs);
   $("diagDueAt").textContent = diag.dueAtSupported == null ? "unknown" : (diag.dueAtSupported ? "yes" : "no (learning cards withheld safely)");
   $("diagError").textContent = diag.lastError || "—";
 }

@@ -24,7 +24,8 @@ function fixture({cards=[cardA,cardB],fresh=true,session=null,apiKey=key,journal
   const data = {
     local:{enabled:true,apiKey,jpdbReviewCacheV4:{
       scope:scope(apiKey),vocabIds:cards.map(card=>[card.vid,card.sid]),vocabCachedAt:now,
-      cards:clone(cards),statesCachedAt:fresh?now:0,dueAtSupported:true,truncated:false,needsRefill:false
+      cards:clone(cards),statesCachedAt:fresh?now:0,dueAtSupported:true,truncated:false,needsRefill:false,
+      recentGrades:[]
     }},
     session:{
       reviewPanelV3:{openTabId:null,revision:0,intents:{}},
@@ -66,7 +67,7 @@ async function boot(data,{fetcher=null,failSet=null,tabs=[]}={}) {
   const chrome={
     runtime:{
       onInstalled:{addListener(fn){installed=fn;}},onStartup:{addListener(){}},
-      onMessage:{addListener(fn){handler=fn;}},getManifest:()=>({version:"0.3.4"}),
+      onMessage:{addListener(fn){handler=fn;}},getManifest:()=>({version:"0.3.5"}),
       openOptionsPage:async()=>{}
     },
     storage:{local:area("local"),session:area("session"),onChanged:{addListener(fn){listeners.push(fn);}}},
@@ -75,7 +76,7 @@ async function boot(data,{fetcher=null,failSet=null,tabs=[]}={}) {
       query:async()=>tabs,
       sendMessage:async(id,message)=>{
         events.push({id,...clone(message)});
-        if(message.type==="JPDB_UI_PROBE") return {ready:true,version:tabs.find(t=>t.id===id)?.version||"0.3.4"};
+        if(message.type==="JPDB_UI_PROBE") return {ready:true,version:tabs.find(t=>t.id===id)?.version||"0.3.5"};
         return {ready:true};
       },
       onRemoved:{addListener(){}}
@@ -292,6 +293,99 @@ await test("successful grade commits and advances before optional lookup; fresh 
   restarted.stop();
 });
 
+await test("warm refresh does not block cached review, and accepted cards stay excluded from delayed stale reads",async()=>{
+  const data=fixture({cards:[cardA,cardB,cardC]});
+  data.local.jpdbReviewCacheV4.statesCachedAt=Date.now()-90_000;
+  let release;
+  const gate=new Promise(resolve=>release=resolve);
+  const runtime=await boot(data,{fetcher:async(url,options,normal)=>{
+    if(url.endsWith("/lookup-vocabulary")&&JSON.parse(options.body).list.length>1) await gate;
+    if(url.endsWith("/review")) return http(null,204); // simulate eventual consistency
+    return normal(url,options);
+  }});
+  const opened=await open(runtime);
+  assert.equal(opened.state.card.vid,101);
+  assert.equal(opened.state.loading,false);
+  await until(()=>runtime.calls.some(x=>x.url.endsWith("/lookup-vocabulary")&&x.body.list.length>1),"warm request");
+  const initialRevision=(await runtime.state()).state.revision;
+  assert.equal((await runtime.state()).state.loading,false);
+  assert.equal((await runtime.state()).state.revision,initialRevision,"background progress must not alter review revision");
+  await grade(runtime);
+  await until(async()=>(await runtime.state()).state.lastOutcome?.status==="accepted");
+  assert.equal((await runtime.state()).state.card.vid,102,"advance while warm read is held");
+  assert.equal((await runtime.state()).state.loading,false);
+  release();
+  await until(()=>runtime.data.local.diagnostics?.warmRefreshes===1,"warm completed");
+  assert.equal((await runtime.state()).state.card.vid,102);
+  assert.equal(runtime.data.local.jpdbReviewCacheV4.recentGrades.length,1);
+  assert.equal(runtime.data.local.jpdbReviewCacheV4.cards.some(c=>c.vid===101),false,
+    "delayed stale JPDB response must not resurface accepted card");
+  assert.equal(runtime.calls.filter(x=>x.url.endsWith("/review")).length,1);
+  runtime.stop();
+  const restarted=await boot(data);
+  await open(restarted);
+  assert.equal((await restarted.state()).state.card.vid,102);
+  assert.equal(restarted.data.local.jpdbReviewCacheV4.recentGrades.length,1);
+  restarted.stop();
+});
+
+await test("an already-running warm scan becomes the foreground refill when the queue drains",async()=>{
+  const data=fixture({cards:[cardA,cardB]});
+  data.local.jpdbReviewCacheV4.vocabIds.push([103,0]);
+  data.local.jpdbReviewCacheV4.statesCachedAt=Date.now()-90_000;
+  let release;
+  const gate=new Promise(resolve=>release=resolve);
+  const runtime=await boot(data,{fetcher:async(url,options,normal)=>{
+    if(url.endsWith("/lookup-vocabulary")&&JSON.parse(options.body).list.length>1) await gate;
+    return normal(url,options);
+  }});
+  await open(runtime);
+  await until(()=>runtime.calls.some(x=>x.url.endsWith("/lookup-vocabulary")&&x.body.list.length>1),"warm started");
+  await grade(runtime);
+  await until(async()=>(await runtime.state()).state.card?.vid===102);
+  await grade(runtime);
+  await until(async()=>(await runtime.state()).state.loading===true,"promoted warm load");
+  assert.equal(runtime.calls.filter(x=>x.url.endsWith("/lookup-vocabulary")&&x.body.list.length>1).length,1,
+    "must not duplicate a scan already in progress");
+  release();
+  await until(async()=>(await runtime.state()).state.card?.vid===103,"refill card");
+  assert.equal((await runtime.state()).state.loading,false);
+  assert.equal(runtime.calls.filter(x=>x.url.endsWith("/review")).length,2);
+  runtime.stop();
+});
+
+await test("background refresh errors do not block remaining cached cards or trigger retry storms",async()=>{
+  const data=fixture({cards:[cardA,cardB]});
+  data.local.jpdbReviewCacheV4.statesCachedAt=Date.now()-90_000;
+  const runtime=await boot(data,{fetcher:async(url,options,normal)=>
+    url.endsWith("/lookup-vocabulary")?http("temporary failure",503):normal(url,options)});
+  await open(runtime);
+  await until(()=>runtime.data.local.diagnostics?.warmFailures===1,"background failure recorded");
+  const s=(await runtime.state()).state;
+  assert.equal(s.card.vid,101);
+  assert.equal(s.loading,false);
+  assert.equal(s.error,null);
+  await runtime.state();await runtime.state();
+  assert.equal(runtime.calls.filter(x=>x.url.endsWith("/lookup-vocabulary")).length,2,
+    "one bounded read plus retry, no concurrent/background storm");
+  runtime.stop();
+});
+
+await test("recently graded due card remains withheld across forced scans until JPDB confirms change",async()=>{
+  const runtime=await boot(fixture({cards:[cardA,cardB]}),{fetcher:async(url,options,normal)=>
+    url.endsWith("/review")?http(null,204):normal(url,options)});
+  await open(runtime);await grade(runtime);
+  await until(async()=>(await runtime.state()).state.card?.vid===102);
+  await runtime.send({type:"JPDB_FORCE_SYNC",wait:true});
+  assert.equal((await runtime.state()).state.card.vid,102);
+  assert.equal(runtime.data.local.jpdbReviewCacheV4.cards.some(c=>c.vid===101),false);
+  runtime.remoteCards.get(101).due_at=777;
+  await runtime.send({type:"JPDB_FORCE_SYNC",wait:true});
+  assert.equal(runtime.data.local.jpdbReviewCacheV4.recentGrades.length,0,
+    "verified changed schedule releases suppression");
+  runtime.stop();
+});
+
 await test("unknown write is never retried; restart and explicit continue retain quarantine",async()=>{
   const data=fixture();
   const runtime=await boot(data,{fetcher:async(url,options,normal)=>url.endsWith("/review")?new Promise(()=>{}):normal(url,options)});
@@ -461,7 +555,7 @@ await test("failure to persist pre-write journal sends no grade",async()=>{
 });
 
 await test("outdated content scripts are reinjected; matching versions are reused",async()=>{
-  const runtime=await boot(fixture(),{tabs:[{id:1,version:"0.3.1"},{id:2,version:"0.3.4"}]});
+  const runtime=await boot(fixture(),{tabs:[{id:1,version:"0.3.1"},{id:2,version:"0.3.5"}]});
   await flush();
   assert.deepEqual(runtime.scripts.map(item=>item.target.tabId),[1]);
   runtime.stop();

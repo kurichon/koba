@@ -65,6 +65,7 @@ An observed schedule/state change does not prove the exact submitted grade.
 | --- | --- |
 | API key and enabled setting | Existing `chrome.storage.local` keys, preserved during same-identity upgrade |
 | Queue | Local cache scoped to SHA-256 fingerprint of API key; up to 1,000 cached cards |
+| Recent accepted reviews | Bounded cache of 64 card IDs/states/due times; prevents eventual-consistency lookups from returning a just-graded card until JPDB confirms a change |
 | Vocabulary IDs | Local cache, same account scope; 12-hour freshness |
 | Review state freshness | 2 minutes; revalidated when stale |
 | Active review / quarantines | Local journal keyed by account fingerprint; at most 32 quarantined attempts |
@@ -83,6 +84,30 @@ requests, so total sync time depends on collection size and network. The UI repo
 ongoing work without tying up ownership controls or the settings message channel.
 Explicit force sync replaces an overlapping ordinary scan if necessary to refresh
 the deck/vocabulary list. Late results from superseded scans are rejected.
+
+### v0.3.5 active-session queue refresh
+
+When a cached card is available, opening, revealing, or grading can trigger a
+**non-blocking warm refresh** of the known vocabulary IDs before the two-minute
+state cache expires (or when a low queue is at least 20 seconds old). The warm
+scan uses the same 400-entry sequential requests and 350-ms pacing as a normal
+scan, never parallel bursts. A one-minute start cooldown bounds extra requests.
+Its progress does **not** change the session revision or disable grading.
+The current UI card stays in place unless JPDB's completed authoritative
+snapshot materially changes it. Closing the popup cancels an unpromoted warm
+refresh; account change and full sync cancel it regardless.
+
+If the queue empties during a warm refresh, the already-running request becomes
+the visible foreground refill rather than starting another duplicate scan.
+Warm-scan failures are recorded in sanitized diagnostics without interrupting
+remaining cached reviews. A promoted scan reports its errors normally.
+Accepted card markers survive worker restarts; an unchanged/stale post-grade
+lookup cannot put a graded card back into the queue. This does not imply
+exactly-once server processing and never resends ambiguous grades.
+
+Warm refresh reduces **interaction downtime**, not the number of necessary
+JPDB requests over a long session. A first cold load and truly empty review
+queue may still require a complete scan.
 
 ## Release discovery and distribution
 
