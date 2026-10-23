@@ -384,22 +384,36 @@ async function run() {
       await p.keyboard.type(' 1 2 3 4 5 ');
       assert.equal(await a.attempts(),1,'typing must not submit reviews');
       await p.locator('.launcher').click(); await cardReady(p,'犬');
-      // A displayed answer may expand the popup. Its upper edge must not
-      // jump when Reveal changes the contents (reported v0.3.5 flicker).
-      const popupTop = () => p.locator('.popup').evaluate(el=>el.getBoundingClientRect().top);
-      const topBeforeReveal = await popupTop();
+      // A displayed answer may expand the popup, but must not move its
+      // already-positioned upper edge. Card readiness can precede the first
+      // requestAnimationFrame that places the popup; that earlier frame is
+      // not a Reveal-induced movement and must not corrupt the baseline.
+      const popupLayout = () => p.locator('.popup').evaluate(el=>({
+        top:el.getBoundingClientRect().top, inlineTop:el.style.top,
+        height:el.getBoundingClientRect().height,
+        viewportHeight:window.innerHeight,
+        launcherTop:el.getRootNode().querySelector('.launcher').getBoundingClientRect().top
+      }));
+      const popupTop = async () => (await popupLayout()).top;
+      await until(async()=>p.locator('.popup').evaluate(el=>Number.isFinite(
+        Number.parseFloat(el.style.top))), 'popup initial placement applied');
+      const settlePositionFrame = () => p.locator('.popup').evaluate(
+        () => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      await settlePositionFrame();
+      const beforeReveal = await popupLayout();
       await p.locator('.reveal').click();
       await until(async()=>(await ui(p)).answer,'answer revealed');
-      const topAfterReveal = await popupTop();
-      assert.ok(Math.abs(topBeforeReveal - topAfterReveal) <= 1,
-        `Reveal shifted popup top by ${topAfterReveal-topBeforeReveal}px`);
+      await settlePositionFrame();
+      const afterReveal = await popupLayout();
+      assert.ok(Math.abs(beforeReveal.top - afterReveal.top) <= 1,
+        `Reveal shifted an initially positioned popup by ${afterReveal.top-beforeReveal.top}px; before=${JSON.stringify(beforeReveal)} after=${JSON.stringify(afterReveal)}`);
       // Switching to an ordinary ChatGPT tab and back must not flicker the
       // existing popup or steal its ownership.
       const neighbor=await a.page('neighbor-tab');
       await neighbor.bringToFront();
       await p.bringToFront();
       assert.equal((await ui(p)).open,true,'switching tabs alone must not close the review');
-      assert.ok(Math.abs((await popupTop()) - topAfterReveal) <= 1,
+      assert.ok(Math.abs((await popupTop()) - afterReveal.top) <= 1,
         'tab activation must not move the open popup');
       await p.locator('.close').click();
       await p.locator('.launcher').click(); await cardReady(p,'犬');
