@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "KoBa",
+  "version": "0.3.3",
+  "description": "Kotoba no Soba — quiet, on-demand JPDB Japanese vocabulary reviews beside ChatGPT.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://jpdb.io/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "KoBa settings"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "minimum_chrome_version": "114",
+  "optional_host_permissions": [
+    "https://api.github.com/*"
+  ]
+}

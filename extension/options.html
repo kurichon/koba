@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KoBa Settings</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; font:14px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:Canvas; color:CanvasText; }
+    main { max-width:720px; margin:40px auto; padding:0 22px 48px; }
+    h1 { font-size:24px; margin-bottom:6px; }
+    .sub { opacity:.66; margin-bottom:28px; }
+    section { border:1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius:14px; padding:18px; margin:14px 0; }
+    label { display:block; font-weight:600; margin:12px 0 5px; }
+    input[type="password"], input[type="text"] { box-sizing:border-box; width:100%; max-width:420px; padding:9px 10px; border:1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius:8px; background:Canvas; color:CanvasText; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    button { padding:8px 11px; border-radius:8px; border:1px solid color-mix(in srgb, CanvasText 18%, transparent); background:transparent; color:inherit; cursor:pointer; }
+    button.primary { background:CanvasText; color:Canvas; }
+    button:disabled { opacity:.5; cursor:wait; }
+    a { color:LinkText; }
+    summary { cursor:pointer; }
+    li { margin:5px 0; }
+    .status { margin-top:10px; min-height:20px; opacity:.78; }
+    dl { display:grid; grid-template-columns:170px 1fr; gap:7px 12px; margin:0; }
+    dt { opacity:.6; }
+    dd { margin:0; overflow-wrap:anywhere; }
+    code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+    .note { font-size:12px; opacity:.64; }
+    pre { white-space:pre-wrap; max-height:180px; overflow:auto; }
+    textarea { box-sizing:border-box; width:100%; padding:10px; border-radius:8px; background:Canvas; color:CanvasText; font:12px/1.4 ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>KoBa</h1>
+  <div class="sub">ことば、そばに。 · Kotoba no Soba — quiet Japanese vocabulary review beside ChatGPT. Nothing appears automatically.</div>
+
+  <section>
+    <div class="row">
+      <label style="margin:0"><input id="enabled" type="checkbox"> Show review button in ChatGPT</label>
+    </div>
+    <label for="apiKey">JPDB API key</label>
+    <input id="apiKey" type="password" autocomplete="off" placeholder="Stored only in this browser profile">
+    <p class="note">The key is stored in <code>chrome.storage.local</code> and is never injected into the ChatGPT page.</p>
+    <div class="row">
+      <button id="save" class="primary">Save</button>
+      <button id="test">Test connection</button>
+      <button id="sync">Force sync</button>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section>
+    <h2 style="font-size:16px;margin-top:0">Behavior</h2>
+    <p>The small neutral button sits beside the left edge of the ChatGPT conversation column. Click it when you want to review. Reviews continue automatically card-by-card after each grade until you click the launcher again, press <code>Esc</code>, or close the popup.</p>
+    <p class="note">Only one review popup is open across ChatGPT tabs at a time. Clicking the launcher in another tab moves the same shared review session there; changing tabs by itself does nothing.</p>
+  </section>
+
+  <section>
+    <h2 style="font-size:16px;margin-top:0">Updates</h2>
+    <p>Check published GitHub releases and show a quiet notice when a newer version is available.</p>
+    <label for="updateRepository">Public GitHub repository</label>
+    <input id="updateRepository" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="180" placeholder="kurichon/koba">
+    <label><input id="updateEnabled" type="checkbox"> Automatically check once a day</label>
+    <p class="note">Enabling checks asks for access to GitHub's release API. Your JPDB API key is never sent to GitHub. Private repositories are not supported by this release checker.</p>
+    <div class="row">
+      <button id="updateSave">Save update settings</button>
+      <button id="updateCheck">Check now</button>
+      <a id="updateRelease" href="https://github.com" target="_blank" rel="noopener noreferrer" hidden>View release</a>
+    </div>
+    <div id="updateStatus" class="status" role="status" aria-live="polite">Loading update settings…</div>
+    <p class="note">Installed version: <span id="updateInstalled">—</span> · Last checked: <span id="updateChecked">Never</span></p>
+    <details class="note">
+      <summary>How updates are installed</summary>
+      <p>This unpacked edition checks for releases automatically; installing the new files is manual.</p>
+      <ol>
+        <li>Open the release and download its <code>KoBa_v…zip</code> asset.</li>
+        <li>Extract the extension files into the same folder you already loaded in Chrome or Brave.</li>
+        <li>Open the browser's Extensions page and press <strong>Reload</strong> for KoBa. Refresh any ChatGPT tab that asks you to refresh.</li>
+      </ol>
+      <p>Keeping the same installation preserves its settings and API key. A future Chrome Web Store installation can use the browser's automatic installation of updates.</p>
+    </details>
+  </section>
+
+  <section>
+    <h2 style="font-size:16px;margin-top:0">Diagnostics</h2>
+    <dl>
+      <dt>Vocabulary IDs cached</dt><dd id="diagVocab">—</dd>
+      <dt>Currently eligible</dt><dd id="diagEligible">—</dd>
+      <dt>Last sync</dt><dd id="diagSync">—</dd>
+      <dt><code>due_at</code> available</dt><dd id="diagDueAt">—</dd>
+      <dt>Last error</dt><dd id="diagError">—</dd>
+      <dt>Open popup tab</dt><dd id="diagOpenTab">—</dd>
+      <dt>Panel revision</dt><dd id="diagPanelRevision">—</dd>
+      <dt>Shared review revision</dt><dd id="diagSessionRevision">—</dd>
+    </dl>
+    <div class="row" style="margin-top:12px"><button id="diagRefresh">Refresh diagnostics</button><button id="diagCopy">Copy diagnostics</button></div>
+    <div id="diagCopyStatus" class="note status" role="status" aria-live="polite"></div>
+    <textarea id="diagnosticExport" aria-label="Sanitized diagnostics to copy" rows="10" readonly hidden></textarea>
+    <div class="note" style="margin-top:10px">Panel events</div>
+    <pre id="panelLog" class="note">—</pre>
+    <div class="note" style="margin-top:10px">Review actions</div>
+    <pre id="actionLog" class="note">—</pre>
+  </section>
+
+  <section>
+    <h2 style="font-size:16px;margin-top:0">Keyboard</h2>
+    <p><code>Space</code> reveal · <code>1</code> Nothing · <code>2</code> Something · <code>3</code> Hard · <code>4</code> Okay · <code>5</code> Easy · <code>Esc</code> close popup.</p>
+    <p class="note">Shortcuts work only while the review popup has keyboard focus, so typing in ChatGPT is unaffected.</p>
+  </section>
+  <p class="note">KoBa · Kotoba no Soba · <a href="LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a> · Independent of JPDB and OpenAI.</p>
+</main>
+<script src="options.js" type="module"></script>
+</body>
+</html>

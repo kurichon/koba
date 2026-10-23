@@ -1,0 +1,19 @@
+{
+  "name": "koba",
+  "version": "0.3.3",
+  "private": true,
+  "type": "module",
+  "description": "KoBa (Kotoba no Soba): discreet, on-demand Japanese vocabulary review beside ChatGPT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --experimental-vm-modules --test tests/*.test.mjs",
+    "test:browser": "node tests/browser.cjs",
+    "build": "node scripts/build-release.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.52.0"
+  },
+  "license": "MIT"
+}
