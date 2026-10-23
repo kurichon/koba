@@ -7,6 +7,12 @@
   let currentAnchor = null;
   // Hold the panel position during reveal/grade layout changes.
   let pinnedPopupTop = null;
+  // -100 = near viewport top, 0 = original centered position, +100 = bottom.
+  // Stored per browser profile; the X coordinate always comes from ChatGPT.
+  let launcherPositionY = 0;
+  let movePopupWithLauncher = false;
+  let launcherDrag = null;
+  let suppressLauncherClickUntil = 0;
 
   try {
     document.dispatchEvent(new CustomEvent(RETIRE_EVENT));
@@ -36,6 +42,9 @@
       * { box-sizing: border-box; }
       button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
       .launcher {
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
         position: fixed;
         width: 30px;
         height: 34px;
@@ -48,7 +57,7 @@
         color: #4a4a4a;
         box-shadow: 0 2px 10px rgba(0,0,0,.05);
         backdrop-filter: blur(10px);
-        cursor: pointer;
+        cursor: grab;
         opacity: .46;
         transition: opacity .14s ease, background .14s ease, transform .14s ease;
         font: 16px/1 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -60,6 +69,7 @@
         background: rgba(255,255,255,.92);
       }
       .launcher:active { transform: scale(.96); }
+      .launcher.dragging { cursor: grabbing; transform: none; transition: none; opacity: .92; }
       .launcher.hidden { display: none; }
       .glyph { transform: translateY(-1px); opacity: .72; }
 
@@ -212,7 +222,7 @@
       }
     </style>
 
-    <button class="launcher hidden" type="button" aria-label="Open vocabulary reviews" aria-expanded="false" title="Reviews">
+    <button class="launcher hidden" type="button" aria-label="Open vocabulary reviews" aria-expanded="false" title="Click to review · Drag vertically to move">
       <span class="glyph">○</span>
     </button>
 
@@ -296,6 +306,39 @@
   const gradeButtons = [...shadow.querySelectorAll('.grade[data-grade]')];
   const cleanup = [];
 
+  function normalizeLauncherPosition(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.round(Math.max(-100, Math.min(100, number))) : 0;
+  }
+
+  function launcherBounds() {
+    const minimum = 48;
+    const maximum = Math.max(minimum, innerHeight - 70);
+    const center = Math.max(minimum, Math.min(maximum, Math.round(innerHeight / 2 - 17)));
+    return { minimum, maximum, center };
+  }
+
+  function launcherTopForPosition(percent) {
+    const { minimum, maximum, center } = launcherBounds();
+    const span = percent < 0 ? center - minimum : maximum - center;
+    return Math.round(center + span * percent / 100);
+  }
+
+  function launcherPositionForTop(top) {
+    const { minimum, maximum, center } = launcherBounds();
+    const clamped = Math.max(minimum, Math.min(maximum, top));
+    const span = clamped < center ? center - minimum : maximum - center;
+    return span > 0 ? normalizeLauncherPosition((clamped - center) * 100 / span) : 0;
+  }
+
+  function setLauncherPosition(value, { followPopup = true } = {}) {
+    const next = normalizeLauncherPosition(value);
+    if (next === launcherPositionY) return;
+    launcherPositionY = next;
+    if (panelOpen && followPopup) movePopupWithLauncher = true;
+    schedulePosition();
+  }
+
   function listen(target, type, fn, options) {
     target.addEventListener(type, fn, options);
     cleanup.push(() => target.removeEventListener(type, fn, options));
@@ -348,6 +391,7 @@
   function retireInstance() {
     if (retired) return;
     retired = true;
+    launcherDrag = null;
     if (positionFrame !== null) cancelAnimationFrame(positionFrame);
     mutationObserver?.disconnect();
     anchorResizeObserver?.disconnect();
@@ -637,9 +681,14 @@
     // Keep an explicitly open review usable during transient composer replacement.
     popup.style.visibility = 'visible';
     const left = valid ? Math.max(8, Math.round(rect.left - 42)) : Math.max(8, Number.parseFloat(launcher.style.left) || 8);
-    const top = Math.max(48, Math.min(innerHeight - 70, Math.round(innerHeight / 2 - 17)));
+    const top = launcherTopForPosition(launcherPositionY);
+    const previousTop = Number.parseFloat(launcher.style.top);
     launcher.style.left = `${left}px`;
     launcher.style.top = `${top}px`;
+    if (movePopupWithLauncher && pinnedPopupTop !== null && Number.isFinite(previousTop)) {
+      pinnedPopupTop += top - previousTop;
+    }
+    movePopupWithLauncher = false;
     if (!panelOpen) return;
     const width = Math.max(180, Math.min(420, innerWidth - 24));
     popup.style.width = `${width}px`;
@@ -682,15 +731,63 @@
       if (!enabled && panelOpen) void changePanel(false);
       schedulePosition();
     }
+    if (changes.launcherPositionY && !launcherDrag) setLauncherPosition(changes.launcherPositionY.newValue);
     if (changes.jpdbUpdateState) renderUpdate(changes.jpdbUpdateState.newValue);
   }
+
+  // Drag only along Y. Pointer capture lets the user release outside the button,
+  // while the movement threshold preserves normal click-to-toggle behavior.
+  listen(launcher, 'pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0 || launcherDrag) return;
+    launcherDrag = { pointerId: event.pointerId, startY: event.clientY,
+      startTop: launcherTopForPosition(launcherPositionY), startPosition: launcherPositionY, moved: false };
+    try { launcher.setPointerCapture(event.pointerId); } catch {}
+  });
+  listen(launcher, 'pointermove', event => {
+    const drag = launcherDrag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const delta = event.clientY - drag.startY;
+    if (!drag.moved && Math.abs(delta) < 6) return;
+    drag.moved = true;
+    launcher.classList.add('dragging');
+    setLauncherPosition(launcherPositionForTop(drag.startTop + delta));
+    event.preventDefault();
+  });
+  listen(launcher, 'pointerup', event => {
+    const drag = launcherDrag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    launcherDrag = null;
+    launcher.classList.remove('dragging');
+    try { launcher.releasePointerCapture(event.pointerId); } catch {}
+    if (drag.moved) {
+      suppressLauncherClickUntil = performance.now() + 700;
+      void chrome.storage.local.set({ launcherPositionY }).catch(() => {
+        // Keep the current layout responsive even if storage is temporarily unavailable.
+      });
+      event.preventDefault();
+    }
+  });
+  listen(launcher, 'pointercancel', event => {
+    if (!launcherDrag || event.pointerId !== launcherDrag.pointerId) return;
+    const previous = launcherDrag.startPosition;
+    launcherDrag = null;
+    launcher.classList.remove('dragging');
+    setLauncherPosition(previous);
+  });
 
   for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click']) {
     listen(shadow, type, event => {
       if (event.composedPath().some(node => node instanceof HTMLButtonElement || node instanceof HTMLAnchorElement)) event.stopPropagation();
     });
   }
-  listen(launcher, 'click', event => { event.preventDefault(); void changePanel(!panelOpen); });
+  listen(launcher, 'click', event => {
+    event.preventDefault();
+    if (performance.now() < suppressLauncherClickUntil) {
+      suppressLauncherClickUntil = 0;
+      return;
+    }
+    void changePanel(!panelOpen);
+  });
   listen(closeBtn, 'click', event => { event.preventDefault(); void changePanel(false); });
   listen(revealBtn, 'click', event => { event.preventDefault(); void reveal(); });
   gradeButtons.forEach(button => listen(button, 'click', event => { event.preventDefault(); void grade(button.dataset.grade); }));
@@ -731,8 +828,9 @@
   async function initialize() {
     const sequence = localPanelSequence;
     try {
-      const stored = await chrome.storage.local.get({ enabled: true, jpdbUpdateState: null });
+      const stored = await chrome.storage.local.get({ enabled: true, launcherPositionY: 0, jpdbUpdateState: null });
       enabled = Boolean(stored.enabled);
+      setLauncherPosition(stored.launcherPositionY, { followPopup: false });
       renderUpdate(stored.jpdbUpdateState);
       schedulePosition();
       const result = await send({ type: 'JPDB_GET_PANEL_STATE' });

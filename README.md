@@ -81,6 +81,9 @@ deck vocabulary; it does not implement dedicated kanji/component learning.
 
 ## Changes in 0.3.6
 
+**New in the v0.3.6 candidate:** You can drag the small KoBa launcher vertically in ChatGPT, or set its height with **KoBa Settings → Behavior → Button vertical position**. Its horizontal alignment still follows ChatGPT's composer. The adjustment is saved for the current browser profile and shared across ChatGPT tabs. Use **Reset to center** for the original location. A drag never opens/closes reviews; an ordinary click still does.
+
+
 The review popup now keeps a stable top edge while Reveal expands the answer or a card changes; smaller windows scroll long answers inside the popup instead of shifting its position. Switching tabs alone does not change review ownership. This update does not change JPDB request/grade handling.
 
 ## Changes in 0.3.5

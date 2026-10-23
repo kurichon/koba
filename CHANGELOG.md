@@ -2,6 +2,11 @@
 
 ## 0.3.6 — 2026-10-23
 
+- Make the launcher vertically draggable while its horizontal X coordinate remains composer-anchored. A short movement threshold separates drag from click and avoids accidental review toggling.
+- Add an accessible vertical-position slider and Reset to center control in extension settings. Store a bounded, viewport-relative position in chrome.storage.local, synced across tabs without altering API keys or review state.
+- Preserve the popup's stabilized Reveal position while users adjust launcher placement; add browser regression for drag, settings, tab sync, and Reveal.
+
+
 - Fix a measured 79–102 px popup jump during Reveal by pinning the panel's vertical position while it is open, rather than recentering on every content resize.
 - Reserve enough space for normal expanded answers; allow internal scrolling on compact viewports. Reposition only when the viewport itself needs clamping or the popup is reopened.
 - Add an actual Chromium regression checking Reveal's position and tab activation without stealing ownership. No changes to JPDB API or grade handling.
