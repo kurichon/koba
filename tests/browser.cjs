@@ -195,6 +195,69 @@ async function runCase(name, fn) {
 }
 
 async function run() {
+  await runCase('Vertical launcher adjustment remains anchored, persists and does not affect reviews', async()=>{
+    const a=await app();
+    try {
+      const first=await a.page('vertical-first'), second=await a.page('vertical-second');
+      const topAndLeft=page=>page.locator('.launcher').evaluate(button=>{
+        const rect=button.getBoundingClientRect();return {top:rect.top,left:rect.left,width:rect.width};
+      });
+      const before=await topAndLeft(first);
+      const centerX=before.left+before.width/2;
+      await first.mouse.move(centerX,before.top+17);
+      await first.mouse.down();
+      await first.mouse.move(centerX,before.top+130,{steps:10});
+      await first.mouse.up();
+      await until(async()=> (await a.worker.evaluate(async()=>{
+        return (await chrome.storage.local.get('launcherPositionY')).launcherPositionY;
+      }))>0,'vertical drag persisted');
+      const moved=await topAndLeft(first);
+      assert.equal(moved.left,before.left,'launcher X must still follow ChatGPT composer');
+      assert.ok(moved.top>before.top+80,'drag must reposition launcher vertically');
+      assert.equal((await ui(first)).open,false,'drag must not be treated as a toggle');
+      await until(async()=>Math.abs((await topAndLeft(second)).top-moved.top)<=1,
+        'launcher position shared across tabs');
+      // A click after a drag must still open normally.
+      await first.locator('.launcher').click(); await cardReady(first,'猫');
+      assert.equal((await ui(second)).open,false);
+      const saved=await a.worker.evaluate(async()=>{
+        return (await chrome.storage.local.get('launcherPositionY')).launcherPositionY;
+      });
+      const options=await a.context.newPage();
+      await options.goto(`chrome-extension://${a.id}/options.html`);
+      const slider=options.locator('#launcherPositionY');
+      await slider.waitFor({state:'visible'});
+      assert.equal(await slider.inputValue(),String(saved),'Settings must read the dragged position');
+      await slider.fill('-65');
+      await until(async()=> (await a.worker.evaluate(async()=>{
+        return (await chrome.storage.local.get('launcherPositionY')).launcherPositionY;
+      }))===-65,'Settings position saved');
+      await until(async()=> (await topAndLeft(first)).top<before.top-80,
+        'Settings slider changes the launcher on the open ChatGPT tab');
+      await until(async()=>Math.abs((await topAndLeft(second)).top-(await topAndLeft(first)).top)<=1,
+        'Settings changes are shared with other tabs');
+      await options.locator('#launcherPositionReset').click();
+      await until(async()=> (await a.worker.evaluate(async()=>{
+        return (await chrome.storage.local.get('launcherPositionY')).launcherPositionY;
+      }))===0,'default position restored');
+      await until(async()=>Math.abs((await topAndLeft(first)).top-before.top)<=1,
+        'Reset returns to original center');
+      // Reopen after changing positions and ensure Reveal never makes the popup twitch.
+      await first.locator('.launcher').click();
+      await first.locator('.launcher').click(); await cardReady(first,'猫');
+      const popupTop=()=>first.locator('.popup').evaluate(el=>el.getBoundingClientRect().top);
+      const topBefore=await popupTop();
+      await first.locator('.reveal').click();
+      await until(async()=>(await ui(first)).answer,'revealed after moving the launcher');
+      assert.ok(Math.abs((await popupTop())-topBefore)<=1,'Reveal must not re-center popup');
+      await second.bringToFront(); await first.bringToFront();
+      assert.ok((await ui(first)).open,'tab activation must not alter popup ownership');
+      assert.equal(await a.attempts(),0,'repositioning must never grade a card');
+      assert.deepEqual(a.errors,[]);
+      return {dragSaved:saved,xAnchorStable:true,settingsPersisted:true,reset:true,revealStable:true};
+    } finally { await a.close(); }
+  });
+
   await runCase('Immediate loading, cancellable popup, and single owner across tabs', async()=>{
     const a=await app();
     try {

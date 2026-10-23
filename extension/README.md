@@ -19,6 +19,10 @@ instructions, and qualification evidence are in the project root.
 The same-folder upgrade preserves the extension's local settings and API key.
 Loading a different folder or removing the extension can change that identity.
 
+## Launcher position
+
+Drag the small `○` button vertically to place it higher or lower; ordinary clicks still open and close the reviewer. In **Extension options → Behavior**, the **Button vertical position** slider provides precise adjustment and **Reset to center** returns to the original position. Only the vertical position moves—the horizontal anchor beside ChatGPT's composer is unchanged. The chosen position persists in this browser profile and syncs across ChatGPT tabs.
+
 ## Use
 
 Click `○` to open or close. While the popup has focus: **Space** reveals,

@@ -2,13 +2,36 @@ import { normalizeRepository, validateReleaseUrl, compareVersions, UPDATE_ORIGIN
 
 const DEFAULTS = {
   enabled: true,
-  apiKey: ""
+  apiKey: "",
+  launcherPositionY: 0
 };
 
 const $ = (id) => document.getElementById(id);
 let updateFormBusy = false;
 let syncAttempt = null;
 let latestSession = null;
+let positionSaveTimer = null;
+
+function normalizeLauncherPosition(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(Math.max(-100, Math.min(100, number))) : 0;
+}
+
+function renderLauncherPosition(value) {
+  const position = normalizeLauncherPosition(value);
+  $("launcherPositionY").value = String(position);
+  const label = position === 0 ? "Centered (default)" :
+    `${Math.abs(position)}% toward ${position < 0 ? "top" : "bottom"}`;
+  $("launcherPositionLabel").textContent = label;
+  $("launcherPositionY").setAttribute("aria-valuetext", label);
+  $("launcherPositionReset").disabled = position === 0;
+}
+
+async function saveLauncherPosition(value) {
+  const position = normalizeLauncherPosition(value);
+  await chrome.storage.local.set({ launcherPositionY: position });
+  $("launcherPositionStatus").textContent = position === 0 ? "Default position restored." : "Position saved.";
+}
 
 function message(type, fields = {}) {
   return new Promise((resolve, reject) => {
@@ -257,6 +280,7 @@ async function load() {
   const data = await chrome.storage.local.get({ ...DEFAULTS, diagnostics: {} });
   $("enabled").checked = Boolean(data.enabled);
   $("apiKey").value = data.apiKey || "";
+  renderLauncherPosition(data.launcherPositionY);
   renderDiagnostics(data.diagnostics || {});
   await Promise.allSettled([renderRuntimeDiagnostics(), loadUpdates({ fillInputs: true })]);
 }
@@ -268,6 +292,27 @@ async function save() {
   });
   $("status").textContent = "Saved.";
 }
+
+$("launcherPositionY").addEventListener("input", () => {
+  const value = $("launcherPositionY").value;
+  renderLauncherPosition(value);
+  clearTimeout(positionSaveTimer);
+  positionSaveTimer = setTimeout(() => {
+    positionSaveTimer = null;
+    void saveLauncherPosition(value).catch(error => { $("launcherPositionStatus").textContent = error.message; });
+  }, 120);
+});
+$("launcherPositionY").addEventListener("change", () => {
+  clearTimeout(positionSaveTimer);
+  positionSaveTimer = null;
+  void saveLauncherPosition($("launcherPositionY").value).catch(error => { $("launcherPositionStatus").textContent = error.message; });
+});
+$("launcherPositionReset").addEventListener("click", () => {
+  clearTimeout(positionSaveTimer);
+  positionSaveTimer = null;
+  renderLauncherPosition(0);
+  void saveLauncherPosition(0).catch(error => { $("launcherPositionStatus").textContent = error.message; });
+});
 
 $("diagRefresh").addEventListener("click", () => syncAttempt ? finishSyncIfReady() : renderRuntimeDiagnostics());
 $("diagCopy").addEventListener("click", copyDiagnostics);
@@ -320,6 +365,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
       $("status").textContent = `Syncing… ${progressText(latestSession.progress)}`;
     }
     if (latestSession && !latestSession.loading && latestSession.revision >= (syncAttempt?.revision || 0)) void finishSyncIfReady();
+  }
+  if (area === "local" && changes.launcherPositionY &&
+    !$("launcherPositionY").matches(":active")) {
+    renderLauncherPosition(changes.launcherPositionY.newValue);
   }
   if (area === "local" && changes.diagnostics) {
     renderDiagnostics(changes.diagnostics.newValue || {});

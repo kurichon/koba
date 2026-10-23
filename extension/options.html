@@ -12,6 +12,7 @@
     .sub { opacity:.66; margin-bottom:28px; }
     section { border:1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius:14px; padding:18px; margin:14px 0; }
     label { display:block; font-weight:600; margin:12px 0 5px; }
+    input[type="range"] { width:100%; max-width:420px; accent-color:currentColor; cursor:pointer; }
     input[type="password"], input[type="text"] { box-sizing:border-box; width:100%; max-width:420px; padding:9px 10px; border:1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius:8px; background:Canvas; color:CanvasText; }
     .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     button { padding:8px 11px; border-radius:8px; border:1px solid color-mix(in srgb, CanvasText 18%, transparent); background:transparent; color:inherit; cursor:pointer; }
@@ -54,6 +55,14 @@
     <h2 style="font-size:16px;margin-top:0">Behavior</h2>
     <p>The small neutral button sits beside the left edge of the ChatGPT conversation column. Click it when you want to review. Reviews continue automatically card-by-card after each grade until you click the launcher again, press <code>Esc</code>, or close the popup.</p>
     <p class="note">Only one review popup is open across ChatGPT tabs at a time. Clicking the launcher in another tab moves the same shared review session there; changing tabs by itself does nothing.</p>
+    <label for="launcherPositionY">Button vertical position</label>
+    <input id="launcherPositionY" type="range" min="-100" max="100" step="1" value="0" aria-describedby="launcherPositionLabel launcherPositionHelp">
+    <div class="row">
+      <span id="launcherPositionLabel">Centered (default)</span>
+      <button type="button" id="launcherPositionReset">Reset to center</button>
+    </div>
+    <p class="note" id="launcherPositionHelp">Drag KoBa's small button vertically in ChatGPT, or adjust it here. Its horizontal position stays anchored beside the ChatGPT composer. The position is saved for all ChatGPT tabs in this browser profile.</p>
+    <div class="note status" id="launcherPositionStatus" role="status" aria-live="polite"></div>
   </section>
 
   <section>
