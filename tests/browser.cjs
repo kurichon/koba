@@ -281,6 +281,11 @@ async function run() {
       assert.equal((await ui(p)).word,'犬');
       const options=await a.context.newPage();
       await options.goto(`chrome-extension://${a.id}/options.html`);
+      // Force the same safe manual-copy fallback already exercised elsewhere;
+      // a working clipboard intentionally keeps the export field hidden.
+      await options.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{
+        configurable:true,value:{writeText:async()=>{throw new Error('denied');}}
+      });});
       await options.locator('#diagCopy').click();
       await options.locator('#diagnosticExport').waitFor({state:'visible'});
       const report=JSON.parse(await options.locator('#diagnosticExport').inputValue());
