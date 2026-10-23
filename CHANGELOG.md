@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.6 — 2026-10-23
+
+- Fix a measured 79–102 px popup jump during Reveal by pinning the panel's vertical position while it is open, rather than recentering on every content resize.
+- Reserve enough space for normal expanded answers; allow internal scrolling on compact viewports. Reposition only when the viewport itself needs clamping or the popup is reopened.
+- Add an actual Chromium regression checking Reveal's position and tab activation without stealing ownership. No changes to JPDB API or grade handling.
+- Requires same-folder Chrome/Brave confirmation against the user's ChatGPT layout; not automatically published.
+
 ## 0.3.5 — 2026-10-23
 
 - Keep an account-scoped, cached review queue playable while a **sequential warm refresh** runs outside the review interaction path. Prefetch is triggered by activity when cached states are approaching their two-minute freshness limit, or when the queue is small and old enough to warrant replenishment.

@@ -321,8 +321,23 @@ async function run() {
       await p.keyboard.type(' 1 2 3 4 5 ');
       assert.equal(await a.attempts(),1,'typing must not submit reviews');
       await p.locator('.launcher').click(); await cardReady(p,'犬');
+      // A displayed answer may expand the popup. Its upper edge must not
+      // jump when Reveal changes the contents (reported v0.3.5 flicker).
+      const popupTop = () => p.locator('.popup').evaluate(el=>el.getBoundingClientRect().top);
+      const topBeforeReveal = await popupTop();
       await p.locator('.reveal').click();
       await until(async()=>(await ui(p)).answer,'answer revealed');
+      const topAfterReveal = await popupTop();
+      assert.ok(Math.abs(topBeforeReveal - topAfterReveal) <= 1,
+        `Reveal shifted popup top by ${topAfterReveal-topBeforeReveal}px`);
+      // Switching to an ordinary ChatGPT tab and back must not flicker the
+      // existing popup or steal its ownership.
+      const neighbor=await a.page('neighbor-tab');
+      await neighbor.bringToFront();
+      await p.bringToFront();
+      assert.equal((await ui(p)).open,true,'switching tabs alone must not close the review');
+      assert.ok(Math.abs((await popupTop()) - topAfterReveal) <= 1,
+        'tab activation must not move the open popup');
       await p.locator('.close').click();
       await p.locator('.launcher').click(); await cardReady(p,'犬');
       assert.equal((await ui(p)).answer,false,'close resets ungraded answer');
