@@ -2,25 +2,29 @@
 
 [← Back to KoBa](../README.md) · [Current architecture](ARCHITECTURE.md) · [Development](DEVELOPMENT.md)
 
-**Current source:** v0.3.7, October 27, 2026. **Current public release:** [v0.3.6](https://github.com/kurichon/koba/releases/tag/v0.3.6) until the v0.3.7 publication checks complete.
+**Current public release:** [KoBa v0.3.7](https://github.com/kurichon/koba/releases/tag/v0.3.7) · **Tagged source:** [`3335543`](https://github.com/kurichon/koba/commit/3335543dbbb998e87a8b7e25e6fc8eb7ffab95de) · **Released:** October 27, 2026.
 
 This record separates demonstrated behavior from checks that require a live user installation. KoBa provides manual review, a vertically adjustable launcher, stable Reveal, JPDB scheduling, safe review recovery, and optional GitHub update notifications.
 
-## v0.3.7 completion scope
+## v0.3.7 completed release
 
-- Build and publish one `KoBa_vVERSION.zip` and its checksum file.
-- Require the KoBa filename in fetched and cached update metadata and in content-script notices.
-- Retire pre-rebrand panel-message adapters, compatibility fixtures, and superseded documents. Retain negative checks proving retired inputs cannot alter an active review.
-- Preserve current browser storage, API key, account-scoped queue and pending/uncertain review recovery.
+- Published one `KoBa_v0.3.7.zip` and its checksum file.
+- Restricted fetched and cached update metadata and content-script notices to the KoBa filename.
+- Retired pre-rebrand panel-message adapters, compatibility fixtures, and superseded documents. Negative checks prove retired inputs cannot alter an active review.
+- Preserved current browser storage, API key, account-scoped queue and pending/uncertain review recovery.
 
-Local candidate checks passed on October 27, 2026:
+Verification and distribution cleanup completed on October 27, 2026:
 
-- Background/recovery and update-checker tests passed, including rejection of retired messages, old package names and cached notices.
-- **8/8 actual-extension Chromium scenarios passed against the extracted v0.3.7 ZIP**, including notice rejection before and after a real page reload. The suite uses controlled ChatGPT layout and simulated JPDB/GitHub transport; it never submits a real review.
-- The archive contains exactly ten allowlisted runtime files, each matching source bytes. The output directory contains only `KoBa_v0.3.7.zip` and its one-line `SHA256SUMS.txt`.
-- ZIP SHA-256: `493a5a633839e3e3432619e106c9e17d4cc8a83cf285cabb3aa86452a6ac729d`.
+| Check | Completed evidence |
+| --- | --- |
+| Source qualification | [Exact PR #8 revision CI](https://github.com/kurichon/koba/actions/runs/40437831919) and [merged-main CI](https://github.com/kurichon/koba/actions/runs/40438073791) passed state/update checks, Chromium scenarios, and runtime packaging. |
+| Distributed package | The [publication workflow](https://github.com/kurichon/koba/actions/runs/40438073787) verified the reviewed ZIP digest and passed **8/8 actual-extension Chromium scenarios against the extracted v0.3.7 ZIP**, including notice rejection before and after page reload. It published the verified package as the latest stable release. |
+| Archive contents | Exactly ten allowlisted runtime files matched source bytes. The release contains `KoBa_v0.3.7.zip` and a one-line `SHA256SUMS.txt`. |
+| Retired distribution artifacts | The audited publication workflow removed the duplicate aliases from v0.3.5/v0.3.6 and the obsolete v0.3.3 draft. Remaining release checksums were reconciled with their canonical ZIPs; existing KoBa ZIP bytes and source tags were verified unchanged. |
 
-Hosted checks on the exact PR revision and the publication workflow must also pass before the release is published.
+ZIP SHA-256: `493a5a633839e3e3432619e106c9e17d4cc8a83cf285cabb3aa86452a6ac729d`.
+
+Browser checks use a controlled ChatGPT layout and simulated JPDB/GitHub transport. They do not submit real reviews or certify a live user installation.
 
 ## Current behavior covered by the controlled suite
 
