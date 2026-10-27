@@ -593,6 +593,99 @@ async function run() {
   });
 
 
+  await runCase('One-time migration exports and imports JPDB state across different extension IDs', async () => {
+    const original = await app();
+    const separatePath = fs.mkdtempSync(path.join(os.tmpdir(), 'koba-new-appdata-extension-'));
+    fs.cpSync(source, separatePath, { recursive: true });
+    let destination;
+    try {
+      const journalKey = 'jpdbReviewRecoveryV4:' + createHash('sha256').update(fakeKey).digest('hex');
+      const journal = {
+        active: { attemptId: 'held-transfer', card: { vid:101, sid:1, spelling:'cat' },
+          grade: 'okay', status: 'uncertain', at: Date.now(), sessionRevision: 6 },
+        quarantines: [], lastOutcome: null
+      };
+      await original.worker.evaluate(async (input) =>
+        chrome.storage.local.set({ launcherPositionY: -36, [input.journalKey]: input.journal,
+          jpdbUpdateSettings: { repository:'kurichon/koba', enabled:false } }), { journalKey, journal });
+      const optionsOld = await original.context.newPage();
+      await optionsOld.goto('chrome-extension://' + original.id + '/options.html');
+      await optionsOld.locator('#migrationExport').waitFor({ state: 'visible' });
+      const [download] = await Promise.all([
+        optionsOld.waitForEvent('download', { timeout: 15000 }),
+        optionsOld.locator('#migrationExport').click()
+      ]);
+      const data = fs.readFileSync(await download.path(), 'utf8');
+      const record = JSON.parse(data);
+      assert.equal(record.format, 'koba-browser-local-migration');
+      assert.equal(record.data.apiKey, fakeKey);
+      assert.equal(record.data[journalKey].active.status, 'uncertain');
+      assert.equal(record.data.launcherPositionY, -36);
+      assert.ok(!Object.hasOwn(record.data, 'sharedReviewSessionV3'), 'session state is not transferred');
+      assert.ok(!Object.hasOwn(record.data, 'diagnostics'), 'diagnostics are not transferred');
+      assert.equal(await original.attempts(), 0, 'export must not submit grades');
+
+      destination = await app({ extension: separatePath });
+      assert.notEqual(original.id, destination.id, 'AppData path must yield a distinct extension ID');
+      await destination.worker.evaluate(() => chrome.storage.local.clear());
+      const optionsNew = await destination.context.newPage();
+      await optionsNew.goto('chrome-extension://' + destination.id + '/options.html');
+      await optionsNew.locator('#migrationFile').setInputFiles({
+        name: 'KoBa_Migration_fixture.json', mimeType: 'application/json', buffer: Buffer.from(data)
+      });
+      optionsNew.on('dialog', dialog => dialog.accept());
+      await optionsNew.locator('#migrationImport').click();
+      await until(async () => destination.worker.evaluate(async () =>
+        Boolean((await chrome.storage.local.get('kobaMigrationImportedV1')).kobaMigrationImportedV1)), 'import completion marker', 15000);
+      const saved = await destination.worker.evaluate(async journalKey => {
+        const state = await chrome.storage.local.get(['apiKey','launcherPositionY',journalKey,
+          'kobaMigrationImportedV1','jpdbUpdateSettings']);
+        return { key:state.apiKey, position:state.launcherPositionY, recovery:state[journalKey],
+          marker:state.kobaMigrationImportedV1, updates:state.jpdbUpdateSettings };
+      }, journalKey);
+      assert.equal(saved.key, fakeKey, 'API key transferred into new extension storage');
+      assert.equal(saved.position, -36);
+      assert.deepEqual(saved.recovery, journal, 'uncertain review journal survives one-time transfer');
+      assert.deepEqual(saved.updates, { repository:'kurichon/koba', enabled:false });
+      assert.equal(saved.marker.sourceExtensionId, original.id);
+      assert.equal(await destination.attempts(), 0, 'import must never resend a grade');
+      const repeated = await optionsNew.evaluate(async file => {
+        try {
+          const module = await import(chrome.runtime.getURL('migration.js'));
+          await module.importMigrationData(file);
+          return 'wrongly accepted';
+        } catch (error) { return error.message; }
+      }, data);
+      assert.match(repeated, /already|completed|overwritten/i, 'repeat import must be refused');
+
+      const tampered = JSON.stringify({ ...record, data: { ...record.data, apiKey: 'tampered' } });
+      const fresh = await app({ extension: separatePath });
+      try {
+        await fresh.worker.evaluate(() => chrome.storage.local.clear());
+        const page = await fresh.context.newPage();
+        await page.goto('chrome-extension://' + fresh.id + '/options.html');
+        const rejected = await page.evaluate(async file => {
+          try {
+            const module = await import(chrome.runtime.getURL('migration.js'));
+            await module.importMigrationData(file);
+            return 'wrongly accepted';
+          } catch (error) { return error.message; }
+        }, tampered);
+        assert.match(rejected, /checksum|cache belongs/i, 'modified backup must be rejected');
+        const state = await fresh.worker.evaluate(async () => chrome.storage.local.get('apiKey'));
+        assert.equal(state.apiKey, undefined, 'tampering must not set JPDB key');
+      } finally { await fresh.close(); }
+      assert.deepEqual(original.errors,[]);
+      assert.deepEqual(destination.errors,[]);
+      return {differentExtensionId:true,transferredReviewRecovery:true,apiKeyPreserved:true,
+        repeatImportRefused:true,tamperRejected:true,gradePosts:0};
+    } finally {
+      if (destination) await destination.close();
+      await original.close();
+      fs.rmSync(separatePath, { recursive: true, force: true });
+    }
+  });
+
 }
 
 run().then(()=>{

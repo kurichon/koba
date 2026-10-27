@@ -11,7 +11,7 @@ const output = join(root, "dist");
 // An explicit allowlist keeps tests, credentials, browser profiles and docs out
 // of both the installable archive and a future Chrome Web Store upload.
 const filenames = [
-  "LICENSE", "background.js", "content.js", "lib.js", "manifest.json", "options.html",
+  "LICENSE", "background.js", "content.js", "lib.js", "manifest.json", "migration.js", "options.html",
   "options.js", "panel.js", "session.js", "updates.js"
 ].sort();
 

@@ -81,14 +81,33 @@
     <p class="note">Installed version: <span id="updateInstalled">—</span> · Last checked: <span id="updateChecked">Never</span></p>
     <details class="note">
       <summary>How updates are installed</summary>
-      <p>This unpacked edition checks for releases automatically; installing the new files is manual.</p>
+      <p>This unpacked edition checks for releases; on Windows use KoBaSetup.exe to update the files in AppData. Browser reload is still required.</p>
       <ol>
-        <li>Open the release and download its <code>KoBa_v…zip</code> asset.</li>
-        <li>Extract the extension files into the same folder you already loaded in Chrome or Brave.</li>
+        <li>Windows: run <code>%LOCALAPPDATA%\KoBa\KoBaSetup.exe</code> and choose Install / Update. First-time users can download the setup executable from GitHub Releases.</li>
+        <li>ZIP-only installation: download the release's <code>KoBa_v…zip</code> asset.</li>
+        <li>Windows setup verifies and replaces the files in the fixed AppData folder; ZIP users extract into their existing loaded folder.</li>
         <li>Open the browser's Extensions page and press <strong>Reload</strong> for KoBa. Refresh any ChatGPT tab that asks you to refresh.</li>
       </ol>
       <p>Keeping the same installation preserves its settings and API key. A future Chrome Web Store installation can use the browser's automatic installation of updates.</p>
     </details>
+  </section>
+
+  <section id="migrationSection">
+    <h2 style="font-size:16px;margin-top:0">One-time KoBa migration</h2>
+    <p>Moving an unpacked extension to a different folder may change its browser identity.
+       Transfer browser-local settings separately, exactly once. Future AppData updates do not use this procedure.</p>
+    <p class="note"><strong>Old KoBa installation:</strong> select <b>Export migration file</b>. This file
+       includes your JPDB API key and review recovery data. Keep it private, never upload or share it,
+       and delete it securely after the transfer is verified.</p>
+    <p class="note"><strong>New AppData installation:</strong> Load unpacked from
+       <code>%LOCALAPPDATA%\KoBa\Extension</code>, open this page and import the export.
+       The destination must be unconfigured. Keep the old extension until you verify the transfer.</p>
+    <div class="row">
+      <button id="migrationExport" type="button">Export migration file</button>
+      <input id="migrationFile" type="file" accept=".json,application/json" aria-label="KoBa migration JSON">
+      <button id="migrationImport" type="button">Import into new KoBa</button>
+    </div>
+    <div id="migrationStatus" class="status" role="status" aria-live="polite"></div>
   </section>
 
   <section>

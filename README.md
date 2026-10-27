@@ -22,23 +22,32 @@ KoBa is a free, open-source browser extension for **desktop Chrome and Brave**. 
 
 ## Installation
 
-### First-time setup
+### Windows installer and updater (planned for v0.3.8)
 
-1. Open **[KoBa Releases](https://github.com/kurichon/koba/releases/latest)** and expand **Assets**. Download `KoBa_vX.Y.Z.zip` (the versioned extension ZIP), **not** GitHub's “Source code” archive.
-2. Extract the ZIP into a folder you can keep. Check that **`manifest.json` is directly inside** the folder you will select—do not point your browser at the ZIP or the entire source repository.
-3. Open `chrome://extensions` in Chrome or `brave://extensions` in Brave. Switch on **Developer mode**, choose **Load unpacked**, and select the extracted folder.
-4. Open **KoBa's extension options** (from its toolbar entry or **Details → Extension options**). Enter your **JPDB API key**, click **Save**, then **Test connection**. Your key is not provided with the download.
-5. Open or refresh [ChatGPT](https://chatgpt.com/). Look for the small `○` button beside the conversation composer, and click it to begin.
+KoBa v0.3.7 is the current published stable extension-only release. Starting with the qualified v0.3.8 release, Windows builds will also provide **KoBaSetup.exe**, a separate installer/updater. Until that is published, use the [current ZIP](https://github.com/kurichon/koba/releases/latest) and follow the portable steps below.
 
-The first load may take longer for a large JPDB collection while KoBa checks which vocabulary is currently reviewable. The panel displays progress while it loads.
+1. Download **KoBaSetup.exe** from the new release Assets and run it. Select **Install / Update KoBa**. The installed browser extension files live permanently under **`%LOCALAPPDATA%\KoBa\Extension`**. A reusable `KoBaSetup.exe` is also saved under `%LOCALAPPDATA%\KoBa`.
+2. In Chrome or Brave open `chrome://extensions` or `brave://extensions`, enable Developer mode, click **Load unpacked**, and select the AppData **Extension** folder. Browser approval is required for a first-time installation.
+3. Open KoBa Options, add your JPDB API key, Save and Test connection. Open or refresh [ChatGPT](https://chatgpt.com/) and click KoBa's `○` launcher.
+4. For future updates, close Chrome and Brave (resolve any uncertain JPDB review first), run the saved **`%LOCALAPPDATA%\KoBa\KoBaSetup.exe`**, and select **Install / Update KoBa**. Restart the browser and reload KoBa if necessary. No migration or folder selection repeats.
 
-### Updating an existing installation
+### One-time migration from a manually installed KoBa (Windows)
 
-1. Download the newer `KoBa_vX.Y.Z.zip` from [Releases](https://github.com/kurichon/koba/releases/latest).
-2. Extract **over the same folder** already loaded as KoBa, replacing the previous extension files.
-3. Find KoBa at `chrome://extensions` or `brave://extensions` and click **Reload**. Refresh an already-open ChatGPT tab if needed.
+Changing the unpacked installation folder **changes the extension ID** in Chromium. Merely moving the folder or creating a junction can detach the existing browser-local API key and review state. The migration therefore transfers browser-local data **explicitly**. Never delete the old installation until the new one is verified.
 
-**Do not uninstall KoBa or load a second copy just to update it.** Keeping the same extension installation and folder preserves its browser-local API key, settings, and review state. A new installation can have a different extension identity and separate storage.
+1. In the old KoBa extension, resolve any active **Saving…** or **Review status uncertain** item as appropriate. Fully close Chrome and Brave. Run **KoBaSetup.exe**, select **Prepare one-time transfer…**, and choose the **old KoBa folder with `manifest.json`**. Setup retains a copy of the original folder, installs current KoBa files into the **same real old directory path** (so the existing browser entry can export its data), and also installs KoBa in AppData.
+2. Reopen the browser, open **Options on the OLD KoBa extension entry** and choose **Export migration file**. The downloaded `KoBa_Migration_*.json` contains your **JPDB API key, review recovery journal, and browser-local preferences**. **Keep it private. Do not upload or share it.**
+3. In the same browser profile, use **Load unpacked** to register **`%LOCALAPPDATA%\KoBa\Extension`** as a **new** KoBa installation. Open Options on this **new AppData extension** (not the old entry). Select the JSON and choose **Import into new KoBa**. Import refuses existing configured JPDB data and verifies the transfer. The action is marked as completed so it cannot run again.
+4. Verify the JPDB key, button position, review recovery state and normal operation in the new installation. **Only then** remove the old extension entry. Delete the sensitive migration JSON securely after verification. Leave the original folder backup intact until satisfied.
+5. If the old extension fails before transfer, fully close the browser and select **Restore original folder…** in setup. The original files are restored from backup. Setup never modifies Chrome or Brave profile files.
+
+**The Windows folder-preparation workflow runs at most once.** Later releases are normal AppData-only updates; they do not migrate browser data again.
+
+### Portable ZIP installation (Chrome, Brave and other supported platforms)
+
+Download the single **`KoBa_vX.Y.Z.zip`** from [GitHub Releases](https://github.com/kurichon/koba/releases/latest), not the auto-generated source archive. Extract into a permanent directory containing `manifest.json` and select that directory through **Load unpacked**. Update it by replacing its files **in the same folder** and clicking **Reload**. Never load another copy merely to update.
+
+The first vocabulary scan can be slower for a large JPDB deck. KoBa displays progress while identifying reviewable words.
 
 ## How to use
 
@@ -66,7 +75,7 @@ KoBa reviews **due, failed, and eligible learning vocabulary** already in your J
 
 In KoBa's extension options you can enable/disable the button, manage your JPDB API key, check the connection, adjust button position, request a fresh sync, and view diagnostics.
 
-To check for new versions, open **Settings → Updates**, use repository `kurichon/koba`, and select **Check now** (or opt in to daily checks). GitHub release checks are optional. **KoBa can notify you about an update, but unpacked extensions do not install it automatically**—follow the update steps above.
+To check for new versions, open **Settings → Updates**, use repository `kurichon/koba`, and select **Check now** (or opt in to daily checks). GitHub release checks are optional. **KoBa can notify you about updates.** Starting with v0.3.8, the optional Windows KoBaSetup updater can install verified new files on request; browsers still require Reload. ZIP-only users replace their extension files manually.
 
 If KoBa is missing, taking a long time to load, or shows **Review status uncertain**, start with the [troubleshooting and recovery guide](docs/USER_GUIDE.md). For bugs, use [GitHub Issues](https://github.com/kurichon/koba/issues) and include KoBa's **Copy diagnostics** output if useful—**never share your API key**.
 

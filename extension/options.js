@@ -1,4 +1,5 @@
 import { normalizeRepository, validateReleaseUrl, compareVersions, UPDATE_ORIGIN } from "./updates.js";
+import { exportMigrationData, importMigrationData, IMPORT_MARKER } from "./migration.js";
 
 const DEFAULTS = {
   enabled: true,
@@ -282,7 +283,7 @@ async function load() {
   $("apiKey").value = data.apiKey || "";
   renderLauncherPosition(data.launcherPositionY);
   renderDiagnostics(data.diagnostics || {});
-  await Promise.allSettled([renderRuntimeDiagnostics(), loadUpdates({ fillInputs: true })]);
+  await Promise.allSettled([renderRuntimeDiagnostics(), loadUpdates({ fillInputs: true }), refreshMigrationSection()]);
 }
 
 async function save() {
@@ -375,6 +376,59 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (syncAttempt && !syncAttempt.starting) void finishSyncIfReady();
   }
   if (area === "local" && (changes.jpdbUpdateState || changes.jpdbUpdateSettings)) void loadUpdates();
+});
+
+
+async function refreshMigrationSection() {
+  const data = await chrome.storage.local.get(IMPORT_MARKER);
+  const finished = Boolean(data[IMPORT_MARKER]);
+  $("migrationSection").hidden = finished;
+  if (finished) $("migrationStatus").textContent = "One-time migration already imported.";
+}
+
+$("migrationExport").addEventListener("click", async () => {
+  const button = $("migrationExport");
+  button.disabled = true;
+  try {
+    const json = await exportMigrationData();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "KoBa_Migration_" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $("migrationStatus").textContent = "Export created. Keep it private; it contains your JPDB API key. " +
+      "Load KoBa from the new AppData folder and import there. Do not remove your old extension yet.";
+  } catch (error) {
+    $("migrationStatus").textContent = "Export stopped: " + error.message;
+  } finally { button.disabled = false; }
+});
+
+$("migrationImport").addEventListener("click", async () => {
+  const file = $("migrationFile").files?.[0];
+  if (!file) { $("migrationStatus").textContent = "Select the JSON export from your previous KoBa extension."; return; }
+  if (file.size > 8 * 1024 * 1024) {
+    $("migrationStatus").textContent = "The selected migration file is too large."; return;
+  }
+  if (!confirm("Import your old KoBa API key and review recovery data into this NEW extension? " +
+    "Existing JPDB data will never be overwritten."))
+    return;
+  const button = $("migrationImport");
+  button.disabled = true;
+  try {
+    const summary = await importMigrationData(await file.text());
+    $("migrationStatus").textContent = "Migration verified: " + summary.transferredKeys +
+      " storage fields imported. Confirm the JPDB key, settings, and review status. " +
+      "Then remove the OLD browser extension entry and securely delete the export JSON.";
+    $("migrationFile").value = "";
+    await load();
+  } catch (error) {
+    $("migrationStatus").textContent = "Import stopped: " + error.message +
+      " Keep your old KoBa installation and the export file.";
+  } finally { button.disabled = false; }
 });
 
 load().catch(error => { $("status").textContent = error.message; });

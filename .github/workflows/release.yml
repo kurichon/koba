@@ -1,25 +1,49 @@
 name: Prepare draft release
-
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag matching manifest version (e.g., v0.3.7)'
+        description: 'Release tag matching manifest version (e.g., v0.3.8)'
         required: true
-        default: 'v0.3.7'
+        default: 'v0.3.8'
         type: string
-
 permissions:
   contents: read
-
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
   cancel-in-progress: false
-
 jobs:
+  build-windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build canonical ZIP and Windows installer
+        shell: pwsh
+        run: |
+          npm ci
+          npm run build
+          dotnet publish installer/KoBaSetup/KoBaSetup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/windows
+          $zip = (Get-ChildItem dist/KoBa_v*.zip | Select-Object -First 1).FullName
+          & ./dist/windows/KoBaSetup.exe --self-test $zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KoBaSetup-windows
+          path: dist/windows/KoBaSetup.exe
+          if-no-files-found: error
+          retention-days: 7
+
   qualify-and-draft:
+    needs: build-windows-installer
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -34,16 +58,20 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Install locked test dependencies
-        run: npm ci
+      - run: npm ci
       - name: Require an exact version tag and build runtime ZIP
         run: npm run build -- --tag "$RELEASE_TAG"
-      - name: Run state and update tests
-        run: npm test
-      - name: Install Chromium and system dependencies
-        run: npx playwright install --with-deps chromium
-      - name: Exercise the extension in Chromium
-        run: xvfb-run -a npm run test:browser
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: xvfb-run -a npm run test:browser
+      - uses: actions/download-artifact@v4
+        with:
+          name: KoBaSetup-windows
+          path: dist/windows
+      - name: Verify Windows installer artifact
+        run: |
+          test -s dist/windows/KoBaSetup.exe
+          file dist/windows/KoBaSetup.exe | grep -E 'PE32\+? executable'
       - name: Create release tag from qualified commit (manual runs only)
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -58,7 +86,7 @@ jobs:
             git tag "$RELEASE_TAG" "$GITHUB_SHA"
             git push origin "refs/tags/$RELEASE_TAG"
           fi
-      - name: Create an unpublished draft with checked assets
+      - name: Create an unpublished draft with the installer and canonical ZIP
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -66,4 +94,5 @@ jobs:
           gh release create "$RELEASE_TAG"
           "dist/KoBa_v${RELEASE_TAG#v}.zip"
           dist/SHA256SUMS.txt
+          dist/windows/KoBaSetup.exe
           --verify-tag --draft --title "$RELEASE_TAG" --generate-notes

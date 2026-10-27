@@ -10,8 +10,9 @@ This page is for maintainers and contributors. First-time users should start wit
 | --- | --- |
 | `extension/` | Unpacked Chrome/Brave extension, including `manifest.json`, UI, and background worker |
 | `scripts/build-release.mjs` | Builds deterministic, runtime-only release ZIPs with checksums |
+| `installer/KoBaSetup/` | Self-contained Windows installer/updater, transactional swaps and one-time original-path transfer preparation |
 | `tests/` | Background-state, update-checker, and controlled Chromium tests |
-| `.github/workflows/ci.yml` | Qualification for PRs, `main` pushes, and manual runs |
+| `.github/workflows/ci.yml` | Linux extension checks plus Windows installer and browser identity checks |
 | `.github/workflows/release.yml` | Creates a **draft** GitHub release from an exact version tag |
 | `docs/` | User guide, architecture, updates, and current qualification |
 | `dist/` | Generated ZIPs and `SHA256SUMS.txt`; intentionally ignored by Git |
@@ -36,7 +37,7 @@ The ZIP builder requires matching versions in `package.json` and `extension/mani
 npm run build -- --tag v0.3.7
 ```
 
-`dist/` contains one installable `KoBa_vVERSION.zip` and its `SHA256SUMS.txt`. The archive contains only allowlisted extension runtime files and the MIT license, with no user data, keys, tests, documentation, or browser profile. The builder verifies member names, references, CRC, and bytes. Upload only these two named files; do not upload a wildcard of old build output.
+`dist/` contains one installable extension ZIP `KoBa_vVERSION.zip` and its `SHA256SUMS.txt`. The Windows release job adds the separate `KoBaSetup.exe` application. The archive contains only allowlisted extension runtime files and the MIT license, with no user data, keys, tests, documentation, or browser profile. The builder verifies member names, references, CRC, and bytes. Upload only the named ZIP, checksum and the verified self-contained Windows updater executable; do not upload a wildcard of old build output.
 
 ## Change and test guidelines
 
@@ -51,11 +52,15 @@ npm run build -- --tag v0.3.7
 
 1. Update the extension manifest, `package.json`, package lock, and changelog to the same new version. Inspect generated files and run the tests on the proposed source.
 2. Merge only after the relevant PR checks pass. Confirm CI on `main` and perform a real-browser installation/update check if the change affects it.
-3. Open [GitHub Actions → Prepare draft release](https://github.com/kurichon/koba/actions/workflows/release.yml) and enter the exact `vVERSION`, or push that version tag from a qualified commit. The workflow requires the tag to match the manifest, runs the tests, and prepares a **draft** with the KoBa ZIP and its checksum file.
+3. Open [GitHub Actions → Prepare draft release](https://github.com/kurichon/koba/actions/workflows/release.yml) and enter the exact `vVERSION`, or push that version tag from a qualified commit. The workflow requires the tag to match the manifest, runs the tests, and prepares a **draft** with the KoBa ZIP, its checksum file and the separately built Windows setup executable.
 4. Review the draft release notes, filenames, installation compatibility, and hashes. **Publish the draft deliberately** and verify [Releases/latest](https://github.com/kurichon/koba/releases/latest) resolves to the new public stable release.
 5. Keep published KoBa package bytes and source tags stable. When a package is explicitly retired, remove its distribution entry and reconcile checksums and help text together.
 
 The default release workflow **does not publish automatically**; historical one-time publication workflows used for previous versions have been removed from the repository. GitHub notifications require a published stable release, not merely a tag or draft. See [update behavior](UPDATES.md).
+
+## Windows installer verification
+
+CI builds the self-contained `net8.0-windows` WinForms application on Windows, runs `KoBaSetup.exe --self-test dist/KoBa_vVERSION.zip`, and tests ordinary Windows folders, retained backups, explicit rollback and subsequent updates. A disposable Chromium profile test checks that replacing **real files at the same unpacked path** preserves the ID and `chrome.storage.local`, unlike moving to a different unpacked path. Browser transfer uses explicit user-controlled export/import from KoBa Options; no browser-profile databases are edited. The installer stages official release downloads, checks ZIP integrity and allowlisted runtime files, uses an update journal and backup during replacement, and never manipulates user browser profile storage. The one-time preparation keeps its own rollback backup and journal. The export JSON contains the API key and must be handled as a secret; import into a new AppData extension requires explicit user confirmation. The Windows executable is presently **unsigned**, so Windows SmartScreen may warn. The first end-user installation/reload in a real Chrome or Brave profile remains a live qualification gate.
 
 ## Supported installation and verification
 

@@ -2,7 +2,7 @@
 
 [← Back to KoBa](../README.md) · [Current architecture](ARCHITECTURE.md) · [Development](DEVELOPMENT.md)
 
-**Current public release:** [KoBa v0.3.7](https://github.com/kurichon/koba/releases/tag/v0.3.7) · **Tagged source:** [`3335543`](https://github.com/kurichon/koba/commit/3335543dbbb998e87a8b7e25e6fc8eb7ffab95de) · **Released:** October 27, 2026.
+**New Windows installer candidate:** v0.3.8; not publicly released until its Windows/AppData qualification is complete. **Current public release:** [KoBa v0.3.7](https://github.com/kurichon/koba/releases/tag/v0.3.7) · **Tagged source:** [`3335543`](https://github.com/kurichon/koba/commit/3335543dbbb998e87a8b7e25e6fc8eb7ffab95de) · **Released:** October 27, 2026.
 
 This record separates demonstrated behavior from checks that require a live user installation. KoBa provides manual review, a vertically adjustable launcher, stable Reveal, JPDB scheduling, safe review recovery, and optional GitHub update notifications.
 
@@ -53,3 +53,14 @@ That evidence does not conclusively explain the historical 15 px observation or 
 - Browser-managed automatic installation. The unpacked distribution supports update notification and manual replacement/reload.
 
 These are bounded verification gaps, not claims of failure. Passing controlled checks does not establish behavior in an untested live environment.
+
+
+## v0.3.8 Windows managed installation candidate
+
+The Windows setup/updater is a self-contained WinForms EXE installing the verified canonical ZIP to `%LOCALAPPDATA%\KoBa\Extension`, with previous-version backups. Windows CI exercises first install, idempotent install, checksum refusal, malicious ZIP refusal, version updates without migration, one-time original-path folder preparation, backup and explicit rollback.
+
+**Negative finding:** A filesystem link at the old unpacked extension path was tested and **changed the Chromium extension ID** (CI [40450410518](https://github.com/kurichon/koba/actions/runs/40450410518)). The unsafe junction migration was withdrawn. The implementation keeps a real directory at the old browser path for export. The new AppData KoBa has a different ID; the old Options exports allowlisted browser-local state and recovery data, and the new Options imports that state after confirming the destination is unconfigured. Import rejects tampered files and repeat attempts, verifies persisted data and never resends grades.
+
+Required CI: actual Chromium UI export/download and import into a different extension ID, repeat-import rejection, tampering rejection, local JPDB recovery retention, plus Windows installer update/rollback tests. A real user's Chrome/Brave profile, unsigned executable behavior and browser hot-reload remain live validation gates. No account traffic is simulated as real JPDB evidence.
+
+The migration JSON is **sensitive plaintext** with a JPDB key. Never share it in bug reports or upload to GitHub. Retain the old browser entry and backup until verifying the new extension.

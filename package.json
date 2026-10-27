@@ -1,6 +1,6 @@
 {
   "name": "koba",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "private": true,
   "type": "module",
   "description": "KoBa (Kotoba no Soba): discreet, on-demand Japanese vocabulary review beside ChatGPT",
