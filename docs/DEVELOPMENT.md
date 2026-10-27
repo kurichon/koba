@@ -11,10 +11,9 @@ This page is for maintainers and contributors. First-time users should start wit
 | `extension/` | Unpacked Chrome/Brave extension, including `manifest.json`, UI, and background worker |
 | `scripts/build-release.mjs` | Builds deterministic, runtime-only release ZIPs with checksums |
 | `tests/` | Background-state, update-checker, and controlled Chromium tests |
-| `tests/fixtures/v0.3.1/` | Immutable pre-rebrand baseline used for upgrade-compatibility testing |
 | `.github/workflows/ci.yml` | Qualification for PRs, `main` pushes, and manual runs |
 | `.github/workflows/release.yml` | Creates a **draft** GitHub release from an exact version tag |
-| `docs/` | User guide, architecture, updates, qualification, and historical evidence |
+| `docs/` | User guide, architecture, updates, and current qualification |
 | `dist/` | Generated ZIPs and `SHA256SUMS.txt`; intentionally ignored by Git |
 
 ## Requirements and commands
@@ -34,10 +33,10 @@ On Linux CI without a display, use `xvfb-run -a npm run test:browser`. `JPDB_TES
 The ZIP builder requires matching versions in `package.json` and `extension/manifest.json`. To verify a release tag as well, run (substituting the correct version):
 
 ```sh
-npm run build -- --tag v0.3.6
+npm run build -- --tag v0.3.7
 ```
 
-`dist/` then contains `KoBa_vVERSION.zip`, the **byte-identical** `JPDB_Review_Button_for_ChatGPT_vVERSION.zip` compatibility alias, and `SHA256SUMS.txt`. The alias is required by older clients' strict release-check logic; it is not a second product or implementation. Both archives contain only allowlisted extension runtime files and the MIT license. They **do not** contain user data, keys, tests, documentation, or a browser profile. The builder verifies member names, references, CRC, and bytes.
+`dist/` contains one installable `KoBa_vVERSION.zip` and its `SHA256SUMS.txt`. The archive contains only allowlisted extension runtime files and the MIT license, with no user data, keys, tests, documentation, or browser profile. The builder verifies member names, references, CRC, and bytes. Upload only these two named files; do not upload a wildcard of old build output.
 
 ## Change and test guidelines
 
@@ -52,17 +51,17 @@ npm run build -- --tag v0.3.6
 
 1. Update the extension manifest, `package.json`, package lock, and changelog to the same new version. Inspect generated files and run the tests on the proposed source.
 2. Merge only after the relevant PR checks pass. Confirm CI on `main` and perform a real-browser installation/update check if the change affects it.
-3. Open [GitHub Actions → Prepare draft release](https://github.com/kurichon/koba/actions/workflows/release.yml) and enter the exact `vVERSION`, or push that version tag from a qualified commit. The workflow requires the tag to match the manifest, runs the tests, and prepares a **draft** with both ZIP filenames and checksums.
+3. Open [GitHub Actions → Prepare draft release](https://github.com/kurichon/koba/actions/workflows/release.yml) and enter the exact `vVERSION`, or push that version tag from a qualified commit. The workflow requires the tag to match the manifest, runs the tests, and prepares a **draft** with the KoBa ZIP and its checksum file.
 4. Review the draft release notes, filenames, installation compatibility, and hashes. **Publish the draft deliberately** and verify [Releases/latest](https://github.com/kurichon/koba/releases/latest) resolves to the new public stable release.
-5. Leave prior release assets in place for recovery and downgrade investigations. Never rewrite an existing tag or replace published assets without a specific migration decision.
+5. Keep published KoBa package bytes and source tags stable. When a package is explicitly retired, remove its distribution entry and reconcile checksums and help text together.
 
 The default release workflow **does not publish automatically**; historical one-time publication workflows used for previous versions have been removed from the repository. GitHub notifications require a published stable release, not merely a tag or draft. See [update behavior](UPDATES.md).
 
-## Compatibility fixtures and historical evidence
+## Supported installation and verification
 
-`tests/fixtures/v0.3.1/` is an intentionally unchanged copy of an older working extension. Keep it for upgrade regression tests and disaster recovery; it is not production source and is excluded from the installable ZIP. Automated headless Chromium checks skip the fragile same-folder **hot reload** scenario because Chromium may keep an outdated extension worker when files are replaced. Perform that upgrade check on an actual Chrome/Brave installation when it materially matters.
+KoBa uses its current package name and explicit panel-message protocol. Pre-rebrand installation compatibility has been retired. Keep current settings, account-scoped review state and recovery safeguards intact. The `jpdb` names used internally identify the service and existing browser storage; they are not a reason to reset or rename user data.
 
-Older review/release evidence is preserved under [docs/history](history/) rather than promoted into current qualification claims. The current [qualification page](QUALIFICATION.md) states the exact latest source and the remaining real-user checks.
+The current [qualification page](QUALIFICATION.md) records source and packaged-browser evidence plus the remaining live-user checks. A cold browser restart tests persisted review recovery; an actual hot extension reload still requires a supported Chrome/Brave installation.
 
 ## Secrets and disclosure
 

@@ -642,6 +642,7 @@
         const newer = Number.isInteger(firstDifference) && firstDifference >= 0 && latest[firstDifference] > installed[firstDifference];
         const tag = typeof update.tag === 'string' ? update.tag : '';
         if (newer && tag.replace(/^[vV]/, '') === update.latestVersion &&
+          update.assetName === `KoBa_v${update.latestVersion}.zip` &&
           /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(repository) && candidate.origin === 'https://github.com' &&
           !candidate.username && !candidate.password && !candidate.search && !candidate.hash &&
           candidate.pathname.toLowerCase() === `/${repository}/releases/tag/${encodeURIComponent(tag)}`.toLowerCase()) url = candidate.href;

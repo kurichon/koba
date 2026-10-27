@@ -1,6 +1,14 @@
 # Changelog
 
-User-facing download links and installation steps live in the [README](README.md). For archived engineering evidence, see [docs/history](docs/history/).
+User-facing download links and installation steps live in the [README](README.md).
+
+## 0.3.7 — 2026-10-27
+
+- Publish one `KoBa_vVERSION.zip` plus its checksum file.
+- Accept only KoBa package names for update discovery and hide unsupported cached notices.
+- Retire pre-rebrand panel-message adapters, compatibility fixtures, and superseded branding/qualification documents.
+- Preserve current KoBa settings, account-scoped reviews, recovery journal, and normal manual updates.
+- Retain the completed popup-position test repair and its strict Reveal/tab-return checks.
 
 ## 0.3.6 — 2026-10-23
 
@@ -8,7 +16,7 @@ User-facing download links and installation steps live in the [README](README.md
 - Added a vertically draggable `○` launcher while retaining horizontal anchoring beside ChatGPT's composer.
 - Added **Behavior → Button vertical position** and **Reset to center** in extension settings; position is saved across ChatGPT tabs.
 - Preserved the normal click-to-open behavior, shared review ownership, and all existing JPDB grading safeguards.
-- Published as the current stable [v0.3.6 release](https://github.com/kurichon/koba/releases/tag/v0.3.6).
+- Published as the [v0.3.6 release](https://github.com/kurichon/koba/releases/tag/v0.3.6).
 
 ## 0.3.5 — 2026-10-23
 
@@ -25,20 +33,3 @@ User-facing download links and installation steps live in the [README](README.md
 
 - Adopt the name **KoBa — Kotoba no Soba (ことばのそば)** and the tagline **ことば、そばに。**
 - Add the [MIT license](LICENSE) and GitHub-ready source/release packaging.
-- Provide `KoBa_vVERSION.zip` and a byte-identical legacy-named alias for older extension update clients.
-
-## 0.3.2 — 2026-10-23
-
-- Acknowledge popup opening immediately, preserve one-owner tab behavior and reject stale actions/late popup replies.
-- Persist pending reviews before their POST and accepted receipts before optional refresh; keep ambiguous results as recoverable, never automatically retry a grade.
-- Scope durable caches and recovery state to the JPDB account fingerprint, survive worker restarts, avoid erroneous learning-card eligibility fallback, and bound network requests.
-- Buffer rapid Reveal/grade input, preserve focus across ChatGPT composer replacement, and add sanitized diagnostics and configurable GitHub release checks.
-- Introduce runtime ZIP/checksum generation and CI/draft-release workflows.
-
-## 0.3.1 — recovered baseline
-
-- Replace automatic interruptions with a manual `○` launcher and continuous card-by-card review.
-- Add shared cross-tab session ownership and popup-only keyboard shortcuts.
-- Reduce hit-testing conflicts with a zero-sized shadow host and isolate interaction events.
-
-Historical baseline, naming and validation details remain in [docs/history](docs/history/) and the frozen [v0.3.1 compatibility fixture](tests/fixtures/v0.3.1/).

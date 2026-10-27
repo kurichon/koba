@@ -1123,12 +1123,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             warmRefreshActive: Boolean(warmJob),
             actionEvents: logs[ACTION_LOG_KEY] || [], panelEvents: logs[PANEL_LOG_KEY] || [] };
         });
-      // Thin adapters for tabs still running the previous injected script.
-      case "JPDB_TOGGLE_PANEL": {
-        const state = await mutate(async () => snapshot(sender?.tab?.id));
-        return await setPanelOpen({ open: !state.open, intentId: "legacy-" + crypto.randomUUID() }, sender);
-      }
-      case "JPDB_CLOSE_PANEL": return await setPanelOpen({ open: false, intentId: "legacy-" + crypto.randomUUID() }, sender);
       default: throw new RequestError("UNKNOWN_MESSAGE", "Unknown extension message.");
     }
   })().then(result => sendResponse({ success: true, ...result }))

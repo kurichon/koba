@@ -1,61 +1,51 @@
 # KoBa qualification and known verification limits
 
-[← Back to KoBa](../README.md) · [Current architecture](ARCHITECTURE.md) · [Historical evidence](history/)
+[← Back to KoBa](../README.md) · [Current architecture](ARCHITECTURE.md) · [Development](DEVELOPMENT.md)
 
-**Current public release:** [KoBa v0.3.6](https://github.com/kurichon/koba/releases/tag/v0.3.6) · **Source commit tagged:** [`be5ce2c`](https://github.com/kurichon/koba/commit/be5ce2c544e5f05d2f57acb4e719c0a24840b63d) · **Date:** October 23, 2026.
+**Current source:** v0.3.7, October 27, 2026. **Current public release:** [v0.3.6](https://github.com/kurichon/koba/releases/tag/v0.3.6) until the v0.3.7 publication checks complete.
 
-This is an evidence register, not a statement that every user environment was tested. The user requested manual on-demand review, a vertically adjustable horizontal-anchored launcher, stable Reveal, preserved JPDB scheduling, reliable queue and recovery, and a GitHub update path. The following evidence applies to the stated source/artifact only.
+This record separates demonstrated behavior from checks that require a live user installation. KoBa provides manual review, a vertically adjustable launcher, stable Reveal, JPDB scheduling, safe review recovery, and optional GitHub update notifications.
 
-## Verified in GitHub Actions
+## v0.3.7 completion scope
 
-- [Source and Chromium CI on the v0.3.6 code](https://github.com/kurichon/koba/actions/runs/39918959317): background-state and GitHub update tests passed; **seven** actual-extension Chromium browser scenarios passed against controlled ChatGPT and simulated JPDB/GitHub transport; runtime ZIP build passed.
-- [v0.3.6 publication workflow](https://github.com/kurichon/koba/actions/runs/39920480123): rebuilt the tagged source, repeated tests, validated SHA-256 against the qualified build, created the immutable source tag and published the stable release.
-- Both release ZIP filenames contain the same runtime bytes. The published `KoBa_v0.3.6.zip` digest is `180948881f3159826969d92102cd81f3f9253ff6f1733fe8f371af4261f656d3` (SHA-256).
+- Build and publish one `KoBa_vVERSION.zip` and its checksum file.
+- Require the KoBa filename in fetched and cached update metadata and in content-script notices.
+- Retire pre-rebrand panel-message adapters, compatibility fixtures, and superseded documents. Retain negative checks proving retired inputs cannot alter an active review.
+- Preserve current browser storage, API key, account-scoped queue and pending/uncertain review recovery.
 
-| Area | Controlled outcome |
+Local candidate checks passed on October 27, 2026:
+
+- Background/recovery and update-checker tests passed, including rejection of retired messages, old package names and cached notices.
+- **8/8 actual-extension Chromium scenarios passed against the extracted v0.3.7 ZIP**, including notice rejection before and after a real page reload. The suite uses controlled ChatGPT layout and simulated JPDB/GitHub transport; it never submits a real review.
+- The archive contains exactly ten allowlisted runtime files, each matching source bytes. The output directory contains only `KoBa_v0.3.7.zip` and its one-line `SHA256SUMS.txt`.
+- ZIP SHA-256: `493a5a633839e3e3432619e106c9e17d4cc8a83cf285cabb3aa86452a6ac729d`.
+
+Hosted checks on the exact PR revision and the publication workflow must also pass before the release is published.
+
+## Current behavior covered by the controlled suite
+
+| Area | Required observable result |
 | --- | --- |
-| First load and ownership | Popup opens visibly, can be dismissed during a held lookup, and follows explicit tab ownership without stale reopening. |
-| Large collection | Delayed second lookup displays stage/progress counts instead of unbounded generic loading. |
-| Reviews and recovery | One grade POST per accepted input; safe journal handling after interrupted writes or worker restarts; no duplicate auto-retry. |
-| Queue warming | Cached review remains interactive while refresh is deliberately held; stale responses do not restore recently graded cards. |
-| Popup stability | Controlled passing browser runs held the popup's top edge during Reveal and tab switching; see the intermittent CI observation below. |
-| Launcher vertical position | Drag, saved setting, cross-tab synchronization, Settings slider and reset preserve the composer-based horizontal anchor. |
-| Updates and diagnostics | Optional GitHub release permission/validation and sanitized diagnostics are exercised with controlled responses. |
+| Ownership and first load | Popup opens immediately, closes during a held lookup, and follows explicit tab ownership without stale reopening. |
+| Large collection | Delayed lookup displays stage/progress counts. |
+| Reviews and recovery | One grade POST per accepted input; interrupted or uncertain writes survive restart without automatic resubmission. |
+| Queue warming | Cached review remains interactive during a held refresh; stale results do not restore recently graded cards. |
+| Popup stability | Both Reveal scenarios and tab-return checks retain the ≤1 px upper-edge invariant after bounded initial layout synchronization. |
+| Launcher positioning | Drag, cross-tab storage, Settings slider and reset preserve the composer-based horizontal anchor. |
+| Updates and diagnostics | Canonical package notices display; retired package names and stale cached notices are rejected; permissions and sanitized diagnostics work. |
+| Retired messages | Unsupported panel messages cannot close, steal, reveal, or grade an active review. |
 
-## Popup layout measurement follow-up (October 27, 2026)
+## Remaining popup observation
 
-Following the documentation-only [PR #5](https://github.com/kurichon/koba/pull/5), the first [main-branch CI run (attempt 1)](https://github.com/kurichon/koba/actions/runs/39923016817/attempts/1) measured a **15 px Reveal-related popup shift** in its Chromium fixture; [attempt 2](https://github.com/kurichon/koba/actions/runs/39923016817/attempts/2) passed the same seven browser scenarios. The v0.3.6 runtime source blobs and packaged SHA-256 were **identical** to the prior qualified release, so the documentation edit did not cause this difference.
+[PR #7](https://github.com/kurichon/koba/pull/7) corrected a layout-measurement race and added a deterministic distinction between initial placement and Reveal. Its [merged-main CI](https://github.com/kurichon/koba/actions/runs/40434918529) passed. The timing reproduction established stale initial positioning, and a deliberately recentering disposable copy failed the strict assertion.
 
-The interrupted [PR #7](https://github.com/kurichon/koba/pull/7) addressed a timing gap: a ready card does not establish that the popup's initial `requestAnimationFrame` placement has run. An inline `top` value also survives closing and can describe the previous opening. The completed test repair at [`5a801c4`](https://github.com/kurichon/koba/commit/5a801c44c55d9fabcd00351db633ed7d28c5dd13) uses one bounded two-frame measurement helper in **both** Reveal scenarios and after tab return, and waits for the Reveal response to finish. It retains the strict **≤1 px** requirement and reports before/after geometry; it never waits until a movement disappears.
-
-### Controlled evidence for the repair
-
-| Check | Observed result |
-| --- | --- |
-| Deterministic stale-baseline reproduction | With the popup closed, change the launcher position and synchronously reopen it. The old top was **334 px**, then initial placement moved it to **131 px** before any Reveal. Reveal after the settled baseline moved it **0 px**; no review POST was sent. |
-| Sensitivity to an actual defect | A disposable extension copy deliberately recentered the popup when the answer appeared. The repaired review scenario rejected a **59 px** Reveal movement at the intended assertion. Production runtime source was not modified. |
-| Local development checks | Node.js **24.22.1**, Playwright **1.52.0**, pinned Chromium build **1169** on Linux: both state/update test files and **8/8** actual-extension browser scenarios passed. The same-folder hot-upgrade scenario remains explicitly skipped. |
-| Hosted verification | [GitHub Actions run 40434565750](https://github.com/kurichon/koba/actions/runs/40434565750) passed on the exact test repair commit, including the state/update tests, **8/8** Chromium scenarios and runtime ZIP validation. Final PR and merge checks remain available in [PR #7](https://github.com/kurichon/koba/pull/7/checks). |
-| Runtime and package integrity | All ten packaged files matched the published `v0.3.6` tag byte-for-byte. Rebuilding with `npm run build -- --tag v0.3.6` reproduced SHA-256 `180948881f3159826969d92102cd81f3f9253ff6f1733fe8f371af4261f656d3`. No version bump or replacement release is needed for this test/documentation repair. |
-
-The new reopen scenario is a regression for the **measurement harness and current asynchronous placement**, not a requirement that a stale position remain visible. A future synchronous-placement implementation may legitimately replace that timing precondition while preserving the Reveal-stability assertion.
-
-The controlled reproduction establishes the stale-baseline mechanism; it does **not** conclusively attribute the historical **15 px** observation to that mechanism, nor exclude every transient flicker. [Issue #6](https://github.com/kurichon/koba/issues/6) therefore remains open for the user's long-idle/live Chrome/Brave symptom. The next required evidence is a supported live-browser check after leaving a panel open, switching away and back, and revealing a card, with viewport or intentional launcher movements distinguished from Reveal. Preserve the existing installation, settings and API key; do not use a real grade merely to test layout.
+That evidence does not conclusively explain the historical 15 px observation or exclude every transient/live-browser flicker. [Issue #6](https://github.com/kurichon/koba/issues/6) remains open for the long-open/idle → switch tabs → return → Reveal sequence on the supported live Chrome/Brave installation. Distinguish actual viewport or intentional launcher movements from Reveal. No real grade is needed to check layout.
 
 ## Not verified by the automated environment
 
-- The exact live Chrome/Brave installation on a user's Windows profile and the **current live ChatGPT page** across different themes, zoom levels and long sessions.
-- JPDB's actual account-specific scheduling and server response times; all browser tests use **simulated API transport** and fake credentials.
-- An in-place **hot update** of an installed unpacked extension on a live Chrome/Brave profile. Headless Chromium can keep a cached prior service worker after an in-place folder replacement; the CI upgrade path is not a substitute.
-- Browser-managed auto-installation: the unpacked distribution supports **notification only**, and a Chrome Web Store edition is not implemented.
+- The exact Windows Chrome/Brave profile and current live ChatGPT layout across themes, zoom levels and long sessions.
+- JPDB's account-specific scheduling and server response times; automated transport is simulated.
+- An in-place hot update on a live Chrome/Brave profile. Cold browser restart coverage verifies persistence, not hot reinjection.
+- Browser-managed automatic installation. The unpacked distribution supports update notification and manual replacement/reload.
 
-These are bounded validation gaps, not automatic claims that the extension fails. When user feedback identifies a defect, reproduce it and add a targeted regression before closing it. A passing CI suite alone is not proof of real-account behavior.
-
-## Historical snapshots retained for recovery
-
-The original reliability and naming reviews are preserved under [history](history/). They describe earlier version candidates, may mention then-pending publication, and must not be used to infer current release status:
-
-- [Recovered v0.3.2 qualification and repair record](history/QUALIFICATION_v0.3.2.md)
-- [v0.3.3 name, licensing and compatibility record](history/BRANDING_0.3.3.md)
-
-The frozen [`tests/fixtures/v0.3.1/`](../tests/fixtures/v0.3.1/) baseline is retained for backward-compatibility investigations and is intentionally excluded from runtime ZIPs. Source code and the [release changelog](../CHANGELOG.md) remain the current behavior/version authority.
+These are bounded verification gaps, not claims of failure. Passing controlled checks does not establish behavior in an untested live environment.

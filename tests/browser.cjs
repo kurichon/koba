@@ -9,7 +9,6 @@ const { chromium } = require('playwright');
 
 const root = path.resolve(__dirname, '..');
 const source = path.resolve(process.env.JPDB_TEST_EXTENSION || path.join(root, 'extension'));
-const upgradeFrom = path.resolve(process.env.JPDB_TEST_UPGRADE_FROM || path.join(__dirname, 'fixtures', 'v0.3.1'));
 const output = path.resolve(process.env.JPDB_TEST_OUTPUT || path.join(root, 'test-results'));
 const manifest = JSON.parse(fs.readFileSync(path.join(source, 'manifest.json')));
 const fakeKey = 'browser-fixture-not-a-real-jpdb-key';
@@ -20,7 +19,6 @@ form{position:fixed;left:300px;bottom:35px;width:620px;height:90px}textarea{widt
 <form><textarea id="prompt-textarea" aria-label="Message"></textarea></form></main></body></html>`;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const results = [];
-const skippedScenarios = [];
 const apps = new Set();
 let browserVersion;
 fs.mkdirSync(output, { recursive: true });
@@ -134,9 +132,7 @@ async function app({ extension = source } = {}) {
   a.attempts = async () => a.worker.evaluate(() => globalThis.__jpdbFixture.attempts.length);
   a.restart = async () => {
     // A cold browser relaunch with the SAME profile and unpacked folder
-    // deterministically checks storage recovery and in-place folder upgrades.
-    // Chrome's internal extensions page and in-process reload can be unavailable
-    // in headless Chromium, so hot re-injection remains a live-browser gate.
+    // checks persisted review recovery. Hot re-injection is a live-browser gate.
     await context.close();
     context = await launch();
     a.context = context;
@@ -557,6 +553,19 @@ async function run() {
       await options.locator('#updateRelease').waitFor({state:'visible'});
       assert.match(await options.locator('#updateRelease').getAttribute('href'),/^https:\/\/github.com\/example\/jpdb-review-button\/releases\/tag\/v0\.4\.0$/);
       await until(async()=>!(await ui(p)).updateHidden,'case-insensitive verified popup release notice');
+      // Unsupported cached package names must not reappear in an open tab or
+      // after reload, even before another metadata check is performed.
+      const setNoticeAsset=async assetName=>a.worker.evaluate(async assetName=>{
+        const data=await chrome.storage.local.get('jpdbUpdateState');
+        await chrome.storage.local.set({jpdbUpdateState:{...data.jpdbUpdateState,assetName}});
+      },assetName);
+      await setNoticeAsset('JPDB_Review_Button_for_ChatGPT_v0.4.0.zip');
+      await until(async()=>(await ui(p)).updateHidden,'unsupported cached notice hidden');
+      await p.reload();
+      await cardReady(p,'猫');
+      assert.equal((await ui(p)).updateHidden,true,'initialization rejects unsupported cached notices');
+      await setNoticeAsset('KoBa_v0.4.0.zip');
+      await until(async()=>!(await ui(p)).updateHidden,'canonical notice restored after reload');
       const alarm=await a.worker.evaluate(()=>chrome.alarms.get('jpdb-release-check'));
       assert.equal(alarm.periodInMinutes,1440);
       await a.worker.evaluate(async version=>{
@@ -583,42 +592,7 @@ async function run() {
     } finally {await a.close();}
   });
 
-  if (fs.existsSync(upgradeFrom) && process.env.JPDB_TEST_UPGRADE === '1') {
-    await runCase('Same-folder v0.3.1 upgrade preserves settings across a browser relaunch',async()=>{
-      const folder=fs.mkdtempSync(path.join(os.tmpdir(),'jpdb-upgrade-source-'));
-      fs.cpSync(upgradeFrom,folder,{recursive:true});
-      const a=await app({extension:folder});
-      try {
-        const p=await a.page('upgrade');
-        fs.cpSync(source,folder,{recursive:true});
-        await a.restart();
-        await until(()=>a.worker.evaluate(()=>chrome.runtime.getManifest().version).then(version=>version===manifest.version),'new installed manifest');
-        const upgraded = await a.page('upgraded');
-        assert.equal(await upgraded.locator('.notice').count(),1,'new KoBa UI loads after relaunch');
-        assert.equal(await upgraded.locator('#ambient-jpdb-host').count(),1);
-        assert.equal(await a.worker.evaluate(async()=> (await chrome.storage.local.get('apiKey')).apiKey),fakeKey);
-        await upgraded.locator('.launcher').click();
-        try { await cardReady(upgraded,'猫'); }
-        catch (error) {
-          const state = await ui(upgraded).catch(e => ({uiError:String(e)}));
-          const observed = await a.worker.evaluate(async () => ({
-            version:chrome.runtime.getManifest().version,
-            endpoints:globalThis.__jpdbFixture?.requests?.map(r=>r.endpoint) || [],
-            attempts:globalThis.__jpdbFixture?.attempts?.length || 0,
-            localKeys:Object.keys(await chrome.storage.local.get(null)).filter(x=>/session|review|queue|key|enabled/i.test(x))
-          })).catch(e => ({workerError:String(e)}));
-          throw new Error(`${error.message}; ui=${JSON.stringify(state)}; worker=${JSON.stringify(observed)}`);
-        }
-        assert.deepEqual(a.errors,[]);
-        return {from:'0.3.1',to:manifest.version,apiKeyPreserved:true,newUiLoaded:true,
-          existingTabHotReinjection:'not tested in headless CI'};
-      } finally {await a.close();fs.rmSync(folder,{recursive:true,force:true});}
-    });
-  } else if (fs.existsSync(upgradeFrom)) {
-    const reason = 'Requires a real supported extension reload; headless Chromium may cache the previous service worker across a folder replacement';
-    skippedScenarios.push({name:'Same-folder v0.3.1 upgrade',reason});
-    console.log('SKIP Same-folder v0.3.1 upgrade: ' + reason);
-  }
+
 }
 
 run().then(()=>{
@@ -626,7 +600,7 @@ run().then(()=>{
     .sort().map(name=>[name,createHash('sha256').update(fs.readFileSync(path.join(source,name))).digest('hex')]));
   const report={candidate:manifest.version,source,executedAt:new Date().toISOString(),
     browserVersion,browserExecutable:process.env.JPDB_TEST_EXECUTABLE || chromium.executablePath(),method:'Actual unpacked MV3 extension; isolated profile; controlled ChatGPT layout and fake JPDB/GitHub transport',
-    limits:['No live JPDB or ChatGPT account','No installed Chrome/Brave user-profile test','Native optional-permission prompt simulated','Exact hot extension upgrade is an opt-in live-browser gate'],runtimeFiles,results,skippedScenarios};
+    limits:['No live JPDB or ChatGPT account','No installed Chrome/Brave user-profile test','Native optional-permission prompt simulated','Hot extension reload requires live-browser validation'],runtimeFiles,results};
   fs.writeFileSync(path.join(output,'browser-results.json'),JSON.stringify(report,null,2)+'\n');
   console.log(`${results.length} browser scenarios passed.`);
 }).catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{
