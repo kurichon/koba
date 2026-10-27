@@ -25,15 +25,15 @@ KoBa deliberately rejects untrusted, ambiguous or unavailable update metadata:
 - Only a **published, non-prerelease** GitHub release is considered; drafts and preview tags are ignored.
 - Its tag must contain a numerically greater Chrome-compatible version (1–4 numeric components, optional `v` prefix) than the current installation.
 - Its release page and assets must belong to the configured public repository, with matching version and valid URL structure.
-- At least one runtime asset must be an uploaded, nonempty `KoBa_vVERSION.zip` or compatible `JPDB_Review_Button_for_ChatGPT_vVERSION.zip`, no larger than 25 MiB.
+- The runtime asset must be an uploaded, nonempty `KoBa_vVERSION.zip`, no larger than 25 MiB.
 
-Older KoBa/JPDB extension clients recognize the legacy asset name, so the release builder still publishes a byte-identical alias. This is intentional compatibility—not duplicate release code.
+Only the KoBa package name is supported. Pre-rebrand update discovery and installation compatibility are retired. Unsupported cached update notices are discarded and revalidated; current settings and review data remain intact.
 
 Metadata requests have a 12-second deadline and a 256 KiB response cap. Checks are deduplicated, respect GitHub rate-limit cooldowns, and reject stale responses after changing the configured repository. A failed check cannot block JPDB reviews. A notice links to GitHub's release page; KoBa **does not download, execute or verify the ZIP contents itself**. The publisher verifies ZIP bytes and hashes before release.
 
 ## How releases are produced
 
-The current source is at [`kurichon/koba`](https://github.com/kurichon/koba). The release builder packages only allowlisted runtime files and the MIT license, produces two byte-identical ZIPs, and writes `SHA256SUMS.txt`. Pull requests and `main` pushes run source tests, controlled Chromium review scenarios and archive validation.
+The current source is at [`kurichon/koba`](https://github.com/kurichon/koba). The release builder packages only allowlisted runtime files and the MIT license, produces one `KoBa_vVERSION.zip`, and writes its `SHA256SUMS.txt`. Pull requests and `main` pushes run source tests, controlled Chromium review scenarios and archive validation.
 
 The permanent [Prepare draft release](https://github.com/kurichon/koba/actions/workflows/release.yml) workflow qualifies the matching version and creates an **unpublished draft**. A maintainer checks it, then publishes it as stable. A pushed tag or a draft alone will not trigger a user-facing update notice. See [DEVELOPMENT.md](DEVELOPMENT.md#release-process) for the full procedure and testing caveats.
 

@@ -2,7 +2,7 @@
 
 [← Back to KoBa](../README.md) · [Development](DEVELOPMENT.md) · [Current qualification](QUALIFICATION.md)
 
-This describes the **current v0.3.6 extension**, not an earlier repair proposal. KoBa is a Manifest V3 Chrome/Brave extension. It adds a manually opened vocabulary panel to ChatGPT, uses a local API key to talk directly to JPDB, and has no separate server or OpenAI API integration.
+This describes the **current v0.3.7 extension**. KoBa is a Manifest V3 Chrome/Brave extension. It adds a manually opened vocabulary panel to ChatGPT, uses a local API key to talk directly to JPDB, and has no separate server or OpenAI API integration.
 
 ## Source responsibilities
 
@@ -64,6 +64,6 @@ Local API-key fingerprints scope cache records; **they are not encryption**. Tre
 
 ## Packaging and distribution
 
-The build allowlists ten files from `extension/`, including the MIT license, and produces a versioned ZIP plus a byte-identical legacy-named alias for old update clients. Neither archive contains fixtures, docs, Node dependencies or credentials. Tests and build are in GitHub Actions; the normal release workflow prepares a **draft**, which must be deliberately published.
+The build allowlists ten files from `extension/`, including the MIT license, and produces one `KoBa_vVERSION.zip` plus `SHA256SUMS.txt`. The archive contains no tests, docs, Node dependencies or credentials. Tests and build are in GitHub Actions; the normal release workflow prepares a **draft**, which must be deliberately published.
 
 The [v0.3.6 stable release](https://github.com/kurichon/koba/releases/tag/v0.3.6) is public. Update checking discovers newer published releases but **cannot install them automatically** into an unpacked Chrome/Brave extension. See [update policy](UPDATES.md) and [developer release steps](DEVELOPMENT.md).

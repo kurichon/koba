@@ -268,6 +268,32 @@ await test("panel ownership and close remain immediate during blocked lookup; no
   runtime.stop();
 });
 
+await test("retired panel messages cannot change current ownership or review state",async()=>{
+  const data=fixture();
+  const runtime=await boot(data);
+  try {
+    await open(runtime,1,"current-open");
+    await reveal(runtime,1);
+    await flush();
+    const panel=clone(data.session.reviewPanelV3);
+    const session=clone(data.session.sharedReviewSessionV3);
+    for(const type of ["JPDB_TOGGLE_PANEL","JPDB_CLOSE_PANEL"]){
+      for(const tabId of [1,2]){
+        const result=await runtime.send({type},tabId);
+        assert.equal(result.success,false,type+' must be rejected');
+        assert.equal(result.errorInfo.code,"UNKNOWN_MESSAGE");
+        assert.deepEqual(data.session.reviewPanelV3,panel,'retired messages cannot close or take ownership');
+        assert.deepEqual(data.session.sharedReviewSessionV3,session,'retired messages cannot change the current review');
+      }
+    }
+    assert.equal(runtime.calls.filter(call=>call.url.endsWith("/review")).length,0);
+    assert.equal(data.local.apiKey,key);
+    const closed=await runtime.send({type:"JPDB_SET_PANEL_OPEN",open:false,intentId:"current-close"},1);
+    assert.equal(closed.success,true);
+    assert.equal(closed.open,false,'current explicit close remains supported');
+  } finally {runtime.stop();}
+});
+
 await test("successful grade commits and advances before optional lookup; fresh worker cache avoids rescan",async()=>{
   const data=fixture();
   const runtime=await boot(data,{fetcher:async(url,options,normal)=>url.endsWith("/lookup-vocabulary")?new Promise(()=>{}):normal(url,options)});

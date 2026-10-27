@@ -4,9 +4,8 @@ export const UPDATE_SETTINGS_KEY = "jpdbUpdateSettings";
 export const UPDATE_STATE_KEY = "jpdbUpdateState";
 export const UPDATE_ORIGIN = "https://api.github.com/*";
 const ALARM_NAME = "jpdb-release-check";
-// Keep accepting legacy asset names for people upgrading from the pre-KoBa releases.
-function acceptedAssetNames(version) {
-  return [`KoBa_v${version}.zip`, `JPDB_Review_Button_for_ChatGPT_v${version}.zip`];
+function expectedAssetName(version) {
+  return `KoBa_v${version}.zip`;
 }
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -78,10 +77,9 @@ function releaseMetadata(release, repository) {
   if (!parseVersion(version) || !validateReleaseUrl(release.html_url, repository, tag)) {
     throw new Error("The latest release has an unsupported version tag or release URL.");
   }
-  const asset = Array.isArray(release.assets) && acceptedAssetNames(version)
-    .map(name => release.assets.find(item => item?.name === name && item.state === "uploaded"))
-    .find(Boolean);
-  const assetName = asset?.name;
+  const assetName = expectedAssetName(version);
+  const asset = Array.isArray(release.assets) && release.assets
+    .find(item => item?.name === assetName && item.state === "uploaded");
   let assetUrl;
   try { assetUrl = new URL(asset?.browser_download_url); } catch {}
   if (!asset || !Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > 25 * 1024 * 1024 ||
@@ -112,16 +110,21 @@ function normalizeState(raw, repository) {
   for (const key of ["checkedAt", "nextCheckAt", "retryAfter"]) {
     if (Number.isFinite(raw[key]) && raw[key] > 0) state[key] = raw[key];
   }
-  if (typeof raw.etag === "string" && raw.etag.length <= 200 && !/[\r\n]/.test(raw.etag)) state.etag = raw.etag;
   const statuses = ["idle", "checking", "current", "available", "error", "permission-required", "disabled", "no-release"];
   if (statuses.includes(raw.status)) state.status = raw.status;
   if (typeof raw.error === "string") state.error = raw.error.slice(0, 240);
   if (parseVersion(raw.latestVersion) && typeof raw.tag === "string" &&
       raw.tag.replace(/^[vV]/, "") === raw.latestVersion && validateReleaseUrl(raw.releaseUrl, repository, raw.tag) &&
-      acceptedAssetNames(raw.latestVersion).includes(raw.assetName)) {
+      raw.assetName === expectedAssetName(raw.latestVersion)) {
     for (const key of ["latestVersion", "releaseUrl", "tag", "assetName"]) state[key] = raw[key];
+    if (typeof raw.etag === "string" && raw.etag.length <= 200 && !/[\r\n]/.test(raw.etag)) state.etag = raw.etag;
     state.available = compareVersions(state.latestVersion, current) > 0;
     if (state.status === "available" && !state.available) state.status = "current";
+  } else if (state.status === "available" || state.status === "current") {
+    // Unsupported cached metadata cannot claim a release or postpone fresh
+    // validation. Preserve retryAfter so this never bypasses a server cooldown.
+    state.status = "idle";
+    state.nextCheckAt = null;
   }
   return state;
 }

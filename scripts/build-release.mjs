@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -47,7 +47,6 @@ async function build() {
 
   await mkdir(output, { recursive: true });
   const filename = `KoBa_v${version}.zip`;
-  const legacyFilename = `JPDB_Review_Button_for_ChatGPT_v${version}.zip`;
   const archive = join(output, filename);
   const python = process.env.JPDB_PYTHON || (process.platform === "win32" ? "python" : "python3");
   const work = await mkdtemp(join(output, ".build-"));
@@ -84,17 +83,12 @@ finally:
   } finally { await rm(work, { recursive: true, force: true }); }
   if (result.error) throw new Error(`Python 3 is needed to build the ZIP: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`ZIP build failed: ${result.stderr.trim()}`);
-  const legacyArchive = join(output, legacyFilename);
-  await copyFile(archive, legacyArchive);
   const sha = createHash("sha256").update(await readFile(archive)).digest("hex");
-  if (createHash("sha256").update(await readFile(legacyArchive)).digest("hex") !== sha) {
-    throw new Error("Legacy update ZIP differs from KoBa release bytes.");
-  }
   const sums = join(output, "SHA256SUMS.txt");
-  await writeFile(`${sums}.tmp`, `${sha}  ${filename}\n${sha}  ${legacyFilename}\n`);
+  await writeFile(`${sums}.tmp`, `${sha}  ${filename}\n`);
   await rename(`${sums}.tmp`, sums);
-  console.log(`Built dist/${filename} and legacy update alias (${files.length} runtime files).`);
-  console.log(`SHA-256 (both): ${sha}`);
+  console.log(`Built dist/${filename} (${files.length} runtime files).`);
+  console.log(`SHA-256: ${sha}`);
   console.log("Wrote dist/SHA256SUMS.txt. No release was published.");
 }
 

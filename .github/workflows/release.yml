@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag matching manifest version (e.g., v0.3.6)'
+        description: 'Release tag matching manifest version (e.g., v0.3.7)'
         required: true
-        default: 'v0.3.6'
+        default: 'v0.3.7'
         type: string
 
 permissions:
@@ -65,6 +65,5 @@ jobs:
         run: >-
           gh release create "$RELEASE_TAG"
           "dist/KoBa_v${RELEASE_TAG#v}.zip"
-          "dist/JPDB_Review_Button_for_ChatGPT_v${RELEASE_TAG#v}.zip"
           dist/SHA256SUMS.txt
           --verify-tag --draft --title "$RELEASE_TAG" --generate-notes

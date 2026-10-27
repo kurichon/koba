@@ -174,23 +174,57 @@ test('404 and oversized metadata produce honest status without fetching code or 
 });
 
 
-test('KoBa release assets are preferred but legacy JPDB names remain valid for transitional updates', async () => {
+test('only canonical KoBa runtime ZIPs qualify for release discovery', async () => {
   const version='0.3.10', tag=`v${version}`;
   const oldName=`JPDB_Review_Button_for_ChatGPT_v${version}.zip`;
-  const newName=`KoBa_v${version}.zip`;
+  const name=`KoBa_v${version}.zip`;
   const oldAsset={name:oldName,state:'uploaded',size:20000,browser_download_url:`https://github.com/example/jpdb/releases/download/${tag}/${oldName}`};
-  const newAsset={name:newName,state:'uploaded',size:20000,browser_download_url:`https://github.com/example/jpdb/releases/download/${tag}/${newName}`};
-  const env=await environment({fetchImpl:async()=>json(release(version,{assets:[oldAsset,newAsset]})),settings:{repository:'example/jpdb',enabled:true}});
-  const canonical=await env.module.checkForUpdates({force:true});
-  assert.equal(canonical.state.assetName,newName,'new installation prefers KoBa filename');
-  // An older, previously validated notice can still be interpreted after upgrading.
-  env.data.jpdbUpdateState={...env.data.jpdbUpdateState,assetName:oldName};
-  assert.equal((await env.module.getUpdateStatus()).state.assetName,oldName);
-  globalThis.fetch=async()=>json(release(version,{assets:[oldAsset]}));
-  const legacy=await env.module.checkForUpdates({force:true});
-  assert.equal(legacy.state.assetName,oldName,'accept older-name-only release metadata');
-  const wrong={...oldAsset,browser_download_url:`https://github.com/attacker/jpdb/releases/download/${tag}/${oldName}`};
-  globalThis.fetch=async()=>json(release(version,{assets:[wrong]}));
-  const invalid=await env.module.checkForUpdates({force:true});
-  assert.equal(invalid.state.status,'error','legacy aliases receive the same strict URL validation');
+  const asset={name,state:'uploaded',size:20000,browser_download_url:`https://github.com/example/jpdb/releases/download/${tag}/${name}`};
+  const samples=[
+    {label:'KoBa only',assets:[asset],available:true},
+    {label:'KoBa with an unrelated historical alias',assets:[oldAsset,asset],available:true},
+    {label:'legacy name only',assets:[oldAsset],available:false},
+    {label:'wrong repository',assets:[{...asset,browser_download_url:`https://github.com/attacker/jpdb/releases/download/${tag}/${name}`}],available:false},
+    {label:'legacy URL under a canonical name',assets:[{...asset,browser_download_url:oldAsset.browser_download_url}],available:false}
+  ];
+  for(const sample of samples){
+    const env=await environment({fetchImpl:async()=>json(release(version,{assets:sample.assets})),settings:{repository:'example/jpdb',enabled:true}});
+    const result=await env.module.checkForUpdates({force:true});
+    assert.equal(result.state.available,sample.available,sample.label);
+    assert.equal(result.state.status,sample.available?'available':'error',sample.label);
+    assert.equal(result.state.assetName,sample.available?name:null,sample.label);
+    assert.equal(env.calls.length,1,'discovery fetches metadata only');
+  }
+});
+
+test('stored legacy notices are discarded and rechecked without changing review data or cooldowns', async () => {
+  const version='0.3.10', tag=`v${version}`;
+  const env=await environment({fetchImpl:async()=>json(release(version)),settings:{repository:'example/jpdb',enabled:true}});
+  const preserved={apiKey:'saved-key-for-updater-test',launcherPositionY:-25,
+    jpdbReviewCacheV4:{scope:'saved-account',cards:[{vid:101,sid:0}]}};
+  Object.assign(env.data,clone(preserved));
+  const retryAfter=Date.now()+60000;
+  env.data.jpdbUpdateState={repository:'example/jpdb',status:'available',available:true,
+    latestVersion:version,tag,releaseUrl:`https://github.com/example/jpdb/releases/tag/${tag}`,
+    assetName:`JPDB_Review_Button_for_ChatGPT_v${version}.zip`,etag:'"old-alias"',
+    checkedAt:Date.now(),nextCheckAt:Date.now()+86400000,retryAfter};
+  for(const status of ['available','current']){
+    env.data.jpdbUpdateState.status=status;
+    const result=await env.module.getUpdateStatus();
+    assert.equal(result.state.status,'idle');
+    assert.equal(result.state.available,false);
+    for(const field of ['assetName','latestVersion','releaseUrl','tag','etag','nextCheckAt']){
+      assert.equal(result.state[field],null,field+' must not reuse unsupported cached metadata');
+    }
+    assert.equal(result.state.retryAfter,retryAfter,'a discarded notice must not bypass a server cooldown');
+  }
+  await env.module.checkForUpdates({force:true});
+  assert.equal(env.calls.length,0,'manual checks still honor the existing cooldown');
+  env.data.jpdbUpdateState.retryAfter=null;
+  const fresh=await env.module.checkForUpdates();
+  assert.equal(env.calls.length,1,'the discarded notice cannot postpone a new metadata check for a day');
+  assert.equal(env.calls[0].options.headers['If-None-Match'],undefined,'a legacy ETag must not suppress fresh validation');
+  assert.equal(fresh.state.assetName,`KoBa_v${version}.zip`);
+  assert.equal(fresh.state.available,true);
+  for(const [field,value] of Object.entries(preserved)) assert.deepEqual(env.data[field],value,field+' must survive');
 });
