@@ -1,14 +1,11 @@
-name: Qualify extension
-
+name: Qualify extension and Windows installer
 on:
   pull_request:
   push:
     branches: [main, master]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   qualify:
     runs-on: ubuntu-24.04
@@ -19,13 +16,38 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - name: Install locked test dependencies
-        run: npm ci
-      - name: Run state and update tests
-        run: npm test
-      - name: Install Chromium and system dependencies
-        run: npx playwright install --with-deps chromium
-      - name: Exercise the extension in Chromium
-        run: xvfb-run -a npm run test:browser
-      - name: Validate runtime-only release package
-        run: npm run build
+      - run: npm ci
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: xvfb-run -a npm run test:browser
+      - run: npm run build
+
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build the canonical KoBa ZIP
+        run: |
+          npm ci
+          npm run build
+      - name: Publish self-contained Windows setup executable
+        shell: pwsh
+        run: dotnet publish installer/KoBaSetup/KoBaSetup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/windows
+      - name: Exercise the Windows install, future update, migration, and rollback
+        shell: pwsh
+        run: |
+          $zip = (Get-ChildItem dist/KoBa_v*.zip | Select-Object -First 1).FullName
+          & ./dist/windows/KoBaSetup.exe --self-test $zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prove unpacked identity survives the junction in Chromium
+        run: |
+          npx playwright install chromium
+          node tests/windows-path-identity.cjs

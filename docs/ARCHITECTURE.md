@@ -64,7 +64,7 @@ Local API-key fingerprints scope cache records; **they are not encryption**. Tre
 
 ## Packaging and distribution
 
-The build allowlists ten files from `extension/`, including the MIT license, and produces one `KoBa_vVERSION.zip` plus `SHA256SUMS.txt`. The archive contains no tests, docs, Node dependencies or credentials. Tests and build are in GitHub Actions; the normal release workflow prepares a **draft**, which must be deliberately published.
+The build allowlists ten files from `extension/`, including the MIT license, and produces one `KoBa_vVERSION.zip` plus `SHA256SUMS.txt`. The archive contains no tests, docs, Node dependencies or credentials. The optional Windows `KoBaSetup.exe` installs or updates these files under `%LOCALAPPDATA%\\KoBa\\Extension` and retains backups. A one-time legacy directory junction migrates the payload without editing browser storage; subsequent updates use AppData only. Tests and build are in GitHub Actions; the normal release workflow prepares a **draft**, which must be deliberately published.
 
 The [v0.3.7 stable release](https://github.com/kurichon/koba/releases/tag/v0.3.7) is public, with one KoBa ZIP and its checksum file. The approved retirement of duplicate package aliases and the obsolete draft is complete; existing KoBa package bytes and source tags were preserved. See the [release evidence](QUALIFICATION.md).
 

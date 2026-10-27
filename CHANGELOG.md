@@ -2,6 +2,13 @@
 
 User-facing download links and installation steps live in the [README](README.md).
 
+## 0.3.8 — 2026-10-27
+
+- Add a self-contained Windows installer/updater for `%LOCALAPPDATA%\KoBa\Extension`. Download and validate the official KoBa ZIP; back up and stage replacements before switching directories.
+- Provide a **one-time** migration from a manually loaded KoBa folder with a retained backup, original-path Windows junction, migration marker, crash-recovery journal and explicit rollback.
+- Leave future updates using the canonical AppData folder with no repeated migration.
+- Preserve the browser extension's JPDB review, account state and on-demand UI; the browser still requires initial Load unpacked or normal Reload.
+
 ## 0.3.7 — 2026-10-27
 
 - Publish one `KoBa_vVERSION.zip` plus its checksum file.

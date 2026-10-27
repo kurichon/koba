@@ -12,11 +12,13 @@ The checker requests only metadata from `https://api.github.com/repos/kurichon/k
 
 ## Installing an available update
 
-1. Open the verified GitHub release and download its **`KoBa_vVERSION.zip`** file under **Assets**. Do not use GitHub's automatically generated **Source code** archive.
-2. Extract the ZIP over the **same folder** already loaded as KoBa, preserving its existing extension installation and identity.
-3. Use **Reload** at `chrome://extensions` (Chrome) or `brave://extensions` (Brave); refresh ChatGPT if the injected UI did not change.
+**Windows managed folder:** Run `%LOCALAPPDATA%\KoBa\KoBaSetup.exe` and select **Install / Update KoBa**. The helper downloads the latest public KoBa ZIP and checksum, verifies expected filenames/version/digest and archive contents, stages the replacement, and saves the previous extension under AppData Backups before swapping the directory. Fully close Chrome/Brave before replacement, then reopen and reload KoBa if necessary.
 
-Your API key and review state belong to the browser extension's storage, not to the ZIP. Removing KoBa or loading a second copy can create a different identity with separate storage. [Step-by-step user instructions](../README.md#updating-an-existing-installation).
+**One-time legacy-folder migration:** If KoBa is already registered from another folder, use the installer’s **Migrate old installation…** exactly once. The original folder is moved to a retained backup and replaced by a directory junction pointing to the fixed AppData extension folder. Keep the **old Chrome/Brave extension entry**, and verify the stored JPDB key after restarting. **Undo migration…** restores the old directory if identity or settings differ. A saved migration marker prevents repeating this step during future updates. See [README installation](../README.md#installation).
+
+**Portable ZIP users:** Download the single `KoBa_vVERSION.zip`, extract over the same installed folder, and use Reload in `chrome://extensions` or `brave://extensions`. Do not load a second extension copy just to update.
+
+The Windows installer never reads, exports or overwrites the browser’s JPDB credentials, and it does not edit Chrome/Brave profile databases. Browser-managed automatic installation remains unavailable to unpacked extensions. Browser closure/reload is required by this distribution approach.
 
 ## Which releases qualify for a notice?
 
@@ -33,12 +35,12 @@ Metadata requests have a 12-second deadline and a 256 KiB response cap. Checks a
 
 ## How releases are produced
 
-The current source is at [`kurichon/koba`](https://github.com/kurichon/koba). The release builder packages only allowlisted runtime files and the MIT license, produces one `KoBa_vVERSION.zip`, and writes its `SHA256SUMS.txt`. Pull requests and `main` pushes run source tests, controlled Chromium review scenarios and archive validation.
+The current source is at [`kurichon/koba`](https://github.com/kurichon/koba). The release builder packages only allowlisted runtime files and the MIT license, produces one canonical `KoBa_vVERSION.zip` and its `SHA256SUMS.txt`. Windows releases additionally ship a purpose-built `KoBaSetup.exe` updater—not a second extension ZIP. Pull requests and `main` pushes run source tests, controlled Chromium review scenarios and archive validation.
 
-The permanent [Prepare draft release](https://github.com/kurichon/koba/actions/workflows/release.yml) workflow qualifies the matching version and creates an **unpublished draft**. A maintainer checks it, then publishes it as stable. A pushed tag or a draft alone will not trigger a user-facing update notice. See [DEVELOPMENT.md](DEVELOPMENT.md#release-process) for the full procedure and testing caveats.
+The permanent [Prepare draft release](https://github.com/kurichon/koba/actions/workflows/release.yml) workflow qualifies the matching version and creates an **unpublished draft** with the canonical ZIP, checksum and Windows updater after Windows installer tests pass. A maintainer checks it, then publishes it as stable. A pushed tag or a draft alone will not trigger a user-facing update notice. See [DEVELOPMENT.md](DEVELOPMENT.md#release-process) for the full procedure and testing caveats.
 
 ## Automatic installation is a separate distribution model
 
-Normal Chrome installs on Windows/macOS cannot self-update from a GitHub ZIP. Browser-managed automatic updates generally require distribution through the **Chrome Web Store**, or an enterprise-managed distribution mechanism where supported. KoBa does not currently offer a Chrome Web Store listing. GitHub remains the official place for source, history, releases, and issue reporting.
+Chrome itself cannot silently install updates from a GitHub ZIP; KoBa's optional Windows updater manages only the unpacked extension files. Browser-managed automatic updates generally require distribution through the **Chrome Web Store**, or an enterprise-managed distribution mechanism where supported. KoBa does not currently offer a Chrome Web Store listing. GitHub remains the official place for source, history, releases, and issue reporting.
 
 Platform references: [Chrome — load an unpacked extension](https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked) · [Chrome — extension distribution](https://developer.chrome.com/docs/extensions/how-to/distribute) · [Brave — managing extensions](https://support.brave.com/hc/en-us/articles/360017909112-How-can-I-add-extensions-to-Brave) · [GitHub — latest release API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release).
