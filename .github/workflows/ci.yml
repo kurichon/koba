@@ -20,7 +20,7 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: xvfb-run -a npm run test:browser
-      - name: Verify original-path bridge preserves Chromium local storage (Linux link)
+      - name: Verify same real path preserves Chromium local storage
         run: timeout --signal=KILL 90s xvfb-run -a node tests/migration-browser.cjs
       - run: npm run build
 

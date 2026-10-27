@@ -1,4 +1,4 @@
-// Real Chromium check of original unpacked path -> filesystem link -> new payload.
+// Real Chromium check of original unpacked path -> actual directory content replacement.
 // Uses a disposable browser profile and fake local data; no JPDB or account traffic.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -46,21 +46,20 @@ async function launch() {
     fs.mkdirSync(path.dirname(payload), { recursive: true });
     fs.renameSync(old, backup);
     fs.cpSync(backup, payload, { recursive: true });
-    fs.symlinkSync(payload, old, 'dir');
+    fs.cpSync(payload, old, { recursive: true }); // real original path, no link
     const linked = await launch();
     stage = 'read-sentinel';
     const restored = await linked.worker.evaluate(async () =>
         (await chrome.storage.local.get('kobaMigrationSentinel')).kobaMigrationSentinel);
-    assert.equal(linked.id, original.id, 'unpacked extension ID changed across same-path link');
+    assert.equal(linked.id, original.id, 'unpacked extension ID changed despite keeping the same real path');
     assert.equal(restored, fakeValue, 'browser-local storage was detached from the original ID');
     stage = 'close-second';
     await context.close();
     context = null;
-    console.log('PASS Chromium: original-path link preserved extension ID and local storage after restart.');
+    console.log('PASS Chromium: original real directory path preserved extension ID and local storage after restart.');
 })().catch(error => { console.error('FAIL', stage, error); process.exitCode = 1; })
 .finally(async () => {
     clearTimeout(watchdog);
     try { await context?.close(); } catch {}
-    try { if (fs.lstatSync(old).isSymbolicLink()) fs.unlinkSync(old); } catch {}
     try { fs.rmSync(base, { recursive: true, force: true }); } catch {}
 });

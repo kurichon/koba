@@ -40,10 +40,10 @@ internal static class SetupSelfTest
             File.WriteAllText(userFile, "do not discard existing folder extras");
             if (InstallerEngine.BrowserRunning())
                 throw new InvalidOperationException("Close test browser processes before the one-time Windows migration smoke test.");
-            var migration = engine.MigrateOnce(source);
+            var migration = engine.PrepareMigrationOnce(source);
             Check(Directory.Exists(migration.BackupPath), "migration must retain its original backup");
-            Check(Directory.Exists(source), "original location becomes an existing junction");
-            Check((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0, "old directory must be a junction");
+            Check(Directory.Exists(source), "original browser path still has a directory");
+            Check((File.GetAttributes(source) & FileAttributes.ReparsePoint) == 0, "old directory remains real, never a junction");
             Equal(version, engine.GetInstalledVersion(), "migrated AppData version");
             Check(File.Exists(Path.Combine(migration.BackupPath, "user-preserved-example.txt")),
                   "extra files are retained only in the original backup");
@@ -77,14 +77,14 @@ internal static class SetupSelfTest
             var nextSha = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(future))).ToLowerInvariant();
             Equal(next, engine.InstallVerifiedPackage(future, next, nextSha, false), "future version updates without migration");
             Equal(next, engine.GetInstalledVersion(), "new version installed");
-            Check(File.Exists(Path.Combine(source, "manifest.json")), "old junction still resolves after an AppData directory swap");
+            Check(File.Exists(Path.Combine(source, "manifest.json")), "old prepared browser path retained as independent real folder");
             Check(Directory.GetDirectories(Path.Combine(engine.RootDirectory, "Backups")).Length == 1,
                   "prior version retained for update rollback");
             Equal(next, engine.InstallVerifiedPackage(archive, version, initialHash, false), "downgrade is ignored");
-            engine.RollbackMigration();
+            engine.RollbackMigrationPreparation();
             Check((File.GetAttributes(source) & FileAttributes.ReparsePoint) == 0, "rollback restores real old directory");
             Check(File.Exists(userFile), "rollback restores original extra files");
-            Check(!engine.IsMigrationCompleted, "rollback resets the one-time marker");
+            Check(!engine.IsMigrationPrepared, "rollback resets the one-time marker");
             Equal(next, engine.GetInstalledVersion(), "rollback does not alter AppData's installed version");
 
             // A malformed ZIP must not touch an existing healthy installation.
@@ -102,7 +102,7 @@ internal static class SetupSelfTest
             Equal(next, engine.GetInstalledVersion(), "malformed ZIP cannot change current install");
 
             Console.WriteLine("PASS KoBa Windows installer: install, repeat, integrity, migration, no-repeat, " +
-                              "future update, path bridge, backup, rollback, downgrade, malicious ZIP.");
+                              "future update, real original path, backup, rollback, downgrade, malicious ZIP.");
             return 0;
         }
         catch (Exception ex)

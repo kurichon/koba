@@ -60,9 +60,9 @@ internal sealed class SetupForm : Form
         };
         install.Text = "Install / Update KoBa";
         install.Width = 165; install.Height = 34;
-        migrate.Text = "Migrate old installation…";
+        migrate.Text = "Prepare one-time transfer…";
         migrate.Width = 175; migrate.Height = 34;
-        rollback.Text = "Undo migration…";
+        rollback.Text = "Restore original folder…";
         rollback.Width = 145; rollback.Height = 34;
         browse.Text = "Open KoBa folder";
         browse.Width = 150; browse.Height = 32;
@@ -105,30 +105,33 @@ internal sealed class SetupForm : Form
             };
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             var answer = MessageBox.Show(this,
-                "One-time migration of the selected existing KoBa directory:\n\n" +
-                "• Close ALL Chrome and Brave windows first.\n" +
-                "• A verified current release is installed in AppData.\n" +
-                "• Your original folder is retained as a backup.\n" +
-                "• A directory junction remains at the ORIGINAL browser path, " +
-                "so its unpacked extension identity and local data can remain associated with it.\n\n" +
-                "Do not remove your existing browser extension. Continue?",
+                "Prepare your existing KoBa extension for a ONE-TIME browser-data transfer:\n\n" +
+                "1. Resolve any pending JPDB review; close ALL Chrome and Brave windows.\n" +
+                "2. Back up your ORIGINAL KoBa directory.\n" +
+                "3. Put current KoBa files into the SAME original directory path (no junctions).\n" +
+                "4. Reopen your OLD extension, export data from KoBa Options.\n" +
+                "5. Load KoBa from AppData as a NEW extension and import that file.\n" +
+                "6. Verify settings/JPDB before removing the old extension.\n\n" +
+                "The export file contains the JPDB API key. Keep it private and delete it after verification. Continue?",
                 "One-time KoBa migration", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (answer != DialogResult.Yes) return;
             await Execute(async () =>
             {
                 var version = await engine.InstallLatestAsync();
                 Append("Installed current KoBa " + version + " to AppData.");
-                var result = engine.MigrateOnce(dialog.SelectedPath);
-                Append("Migration bridge: " + result.OriginalPath + " → " + engine.ExtensionDirectory);
+                var result = engine.PrepareMigrationOnce(dialog.SelectedPath);
+                Append("Original browser path prepared: " + result.OriginalPath);
                 Append("Original folder backup: " + result.BackupPath);
-                Append("Restart the browser and verify your JPDB settings. Do not uninstall the existing extension.");
+                Append("OPEN OLD KoBa Options and export migration JSON before loading KoBa from AppData.");
+                Append("Load AppData KoBa as a new unpacked extension. IMPORT the JSON and verify your JPDB data.");
+                Append("Do not remove the old browser entry or original backup until your data is verified.");
                 engine.SaveUpdaterCopy();
             });
         };
         rollback.Click += async (_, _) => await Execute(() =>
         {
-            engine.RollbackMigration();
-            Append("Migration undone. Your original KoBa directory was restored from its retained backup.");
+            engine.RollbackMigrationPreparation();
+            Append("Old browser extension files restored. The prepared folder copy was retained separately.");
             Append("The AppData installation remains intact; do not load another copy without checking extension identity.");
             return Task.CompletedTask;
         });
@@ -141,8 +144,9 @@ internal sealed class SetupForm : Form
         instructions.Click += (_, _) =>
             MessageBox.Show(this, "First install: Open chrome://extensions or brave://extensions, enable Developer mode, " +
                 "select Load unpacked, then choose:\n\n" + engine.ExtensionDirectory +
-                "\n\nExisting installation: After one-time migration, keep the existing browser entry and " +
-                "reload it. New KoBa versions update files in AppData without another migration.",
+                "\n\nMigration: first export your old extension data from KoBa Options at its original path; then " +
+                "Load unpacked from AppData as a new browser extension and import that JSON there. " +
+                "Only after verification retire the old browser entry. Future updates operate in AppData alone.",
                 "Load / reload KoBa", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
@@ -172,8 +176,8 @@ internal sealed class SetupForm : Form
         location.Text = "Install directory: " + engine.ExtensionDirectory + Environment.NewLine +
                         "Installed extension version: " + version;
         install.Enabled = true;
-        migrate.Enabled = !engine.IsMigrationCompleted;
-        rollback.Enabled = engine.IsMigrationCompleted;
+        migrate.Enabled = !engine.IsMigrationPrepared;
+        rollback.Enabled = engine.IsMigrationPrepared;
     }
 
     private void Append(string message)

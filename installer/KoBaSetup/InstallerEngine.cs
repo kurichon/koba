@@ -25,10 +25,10 @@ internal sealed class InstallerEngine
     private readonly HttpClient http;
     public string RootDirectory { get; }
     public string ExtensionDirectory => Path.Combine(RootDirectory, "Extension");
-    private string MigrationMarker => Path.Combine(RootDirectory, "migration-completed.json");
+    private string MigrationMarker => Path.Combine(RootDirectory, "migration-prepared.json");
     private string MigrationPending => Path.Combine(RootDirectory, "migration-pending.json");
     private string UpdatePending => Path.Combine(RootDirectory, "update-pending.json");
-    public bool IsMigrationCompleted => File.Exists(MigrationMarker);
+    public bool IsMigrationPrepared => File.Exists(MigrationMarker);
 
     internal InstallerEngine(string? rootDirectory = null, HttpClient? client = null)
     {
@@ -142,62 +142,84 @@ internal sealed class InstallerEngine
         finally { if (Directory.Exists(stage)) Directory.Delete(stage, recursive: true); }
     }
 
-    public MigrationRecord MigrateOnce(string sourcePath)
+    // This is only the preparation for a ONE-TIME browser-data transfer. A real
+    // directory remains at the old path so the old extension can export its
+    // chrome.storage.local data before a new AppData-based extension is loaded.
+    // Never replace the old path with a symlink/junction: Chromium can change
+    // the unpacked extension ID when it resolves a linked path.
+    public MigrationRecord PrepareMigrationOnce(string sourcePath)
     {
         PrepareRoot();
         RecoverInterruptedMigration();
-        if (IsMigrationCompleted) throw new InvalidOperationException("This installation has already completed its one-time migration.");
-        if (!Directory.Exists(ExtensionDirectory) || GetInstalledVersion() is null)
-            throw new InvalidOperationException("Install the verified KoBa release under AppData before migrating.");
+        if (IsMigrationPrepared)
+            throw new InvalidOperationException("The old extension was already prepared. Export its data from KoBa Options instead of preparing again.");
+        var version = GetInstalledVersion();
+        if (version is null || CompareVersions(version, "0.3.8") < 0)
+            throw new InvalidOperationException("The official AppData KoBa installation must be v0.3.8 or newer before the one-time export can be prepared.");
         RequireBrowsersClosed();
         var old = Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar);
         var target = Path.GetFullPath(ExtensionDirectory);
-        if (old.Equals(target, StringComparison.OrdinalIgnoreCase) ||
-            IsWithin(old, RootDirectory) || IsWithin(target, old) ||
-            old.StartsWith(@"\\", StringComparison.Ordinal) ||
-            old.Contains('%') || old.Contains('!'))
-            throw new InvalidOperationException("Choose the original local KoBa unpacked-extension folder, not AppData or a redirected path.");
-        if (!Directory.Exists(old) || IsReparse(old))
-            throw new InvalidOperationException("The source must be a real existing KoBa directory, not a symlink or junction.");
-        if (ReadManifestVersion(old) is null || !File.Exists(Path.Combine(old, "background.js")))
-            throw new InvalidOperationException("The selected directory is not a supported KoBa extension. Nothing was moved.");
-        var backup = old + ".KoBa-backup-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss");
-        if (Directory.Exists(backup))
-            throw new InvalidOperationException("A migration backup already exists with the chosen name.");
-        WriteJsonAtomically(MigrationPending, new PendingMove(old, backup, target));
+        if (SamePath(old, target) || IsWithin(old, RootDirectory) || IsWithin(target, old) ||
+            old.StartsWith(@"\\", StringComparison.Ordinal) || old.Contains('%') || old.Contains('!'))
+            throw new InvalidOperationException("Select the existing local unpacked KoBa extension folder outside AppData.");
+        if (!Directory.Exists(old) || IsReparse(old) ||
+            ReadManifestVersion(old) is null || !File.Exists(Path.Combine(old, "background.js")))
+            throw new InvalidOperationException("Select a real KoBa folder containing manifest.json and background.js.");
+        var backup = old + ".KoBa-original-backup-" + Guid.NewGuid().ToString("N");
+        var stage = old + ".KoBa-prep-stage-" + Guid.NewGuid().ToString("N");
+        if (Directory.Exists(backup) || Directory.Exists(stage))
+            throw new IOException("A migration work folder already exists.");
         try
         {
-            Directory.Move(old, backup);
-            CreateJunction(old, target);
-            if (!JunctionPointsTo(old, target))
-                throw new IOException("Windows did not create a junction pointing to the expected AppData folder.");
-            var record = new MigrationRecord(old, backup, target, DateTimeOffset.UtcNow.ToString("O"));
-            WriteJsonAtomically(MigrationMarker, record);
-            File.Delete(MigrationPending);
-            return record;
+            Directory.CreateDirectory(stage);
+            foreach (var name in RuntimeFiles)
+                File.Copy(Path.Combine(ExtensionDirectory, name), Path.Combine(stage, name));
+            if (ReadManifestVersion(stage) != version)
+                throw new InvalidDataException("Prepared extension differs from the verified AppData release.");
+
+            WriteJsonAtomically(MigrationPending, new PendingMove(old, backup, stage));
+            try
+            {
+                Directory.Move(old, backup);
+                Directory.Move(stage, old); // regular folder at EXACT original browser path
+                if (ReadManifestVersion(old) != version || IsReparse(old))
+                    throw new InvalidDataException("Original-path preparation failed verification.");
+                var record = new MigrationRecord(old, backup, target, DateTimeOffset.UtcNow.ToString("O"));
+                WriteJsonAtomically(MigrationMarker, record);
+                File.Delete(MigrationPending);
+                return record;
+            }
+            catch
+            {
+                if (!Directory.Exists(old) && Directory.Exists(backup))
+                    Directory.Move(backup, old);
+                // If stage became the real old directory, preserve it for inspection.
+                // Never overwrite the original backup if rollback cannot finish.
+                throw;
+            }
         }
-        catch
+        finally
         {
-            if (JunctionPointsTo(old, target)) Directory.Delete(old);
-            if (!Directory.Exists(old) && Directory.Exists(backup)) Directory.Move(backup, old);
-            if (Directory.Exists(old) && !IsReparse(old)) File.Delete(MigrationPending);
-            throw;
+            if (Directory.Exists(stage) && !IsReparse(stage)) Directory.Delete(stage, recursive: true);
         }
     }
 
-    public void RollbackMigration()
+    public void RollbackMigrationPreparation()
     {
         PrepareRoot();
         RecoverInterruptedMigration();
-        if (!IsMigrationCompleted) throw new InvalidOperationException("There is no completed migration to undo.");
+        if (!IsMigrationPrepared)
+            throw new InvalidOperationException("No prepared old extension directory is recorded.");
         var record = ReadJson<MigrationRecord>(MigrationMarker)!;
         if (!SamePath(record.TargetPath, ExtensionDirectory) ||
-            !JunctionPointsTo(record.OriginalPath, ExtensionDirectory) ||
+            !Directory.Exists(record.OriginalPath) || IsReparse(record.OriginalPath) ||
+            ReadManifestVersion(record.OriginalPath) is null ||
             !Directory.Exists(record.BackupPath) || IsReparse(record.BackupPath) ||
             ReadManifestVersion(record.BackupPath) is null)
-            throw new InvalidOperationException("The migration bridge or backup has changed. Nothing was removed.");
+            throw new InvalidDataException("Prepared directory or retained backup changed; no rollback attempted.");
         RequireBrowsersClosed();
-        Directory.Delete(record.OriginalPath); // Delete the junction itself, never its target.
+        var preparedCopy = record.OriginalPath + ".KoBa-prepared-copy-" + Guid.NewGuid().ToString("N");
+        Directory.Move(record.OriginalPath, preparedCopy);
         try
         {
             Directory.Move(record.BackupPath, record.OriginalPath);
@@ -205,9 +227,11 @@ internal sealed class InstallerEngine
         }
         catch
         {
-            if (!Directory.Exists(record.OriginalPath)) CreateJunction(record.OriginalPath, ExtensionDirectory);
+            if (!Directory.Exists(record.OriginalPath))
+                Directory.Move(preparedCopy, record.OriginalPath);
             throw;
         }
+        // Do not discard the prepared copy automatically: it is a recovery artifact.
     }
 
     public void SaveUpdaterCopy()
@@ -255,26 +279,40 @@ internal sealed class InstallerEngine
     {
         var state = ReadJson<PendingMove>(MigrationPending);
         if (state is null) return;
-        if (!SamePath(state.TargetPath, ExtensionDirectory) || !Directory.Exists(state.BackupPath) ||
-            IsReparse(state.BackupPath) || ReadManifestVersion(state.BackupPath) is null)
-        {
-            if (Directory.Exists(state.OriginalPath) && !IsReparse(state.OriginalPath) &&
-                !Directory.Exists(state.BackupPath)) { File.Delete(MigrationPending); return; }
-            throw new InvalidDataException("Migration recovery cannot verify the source backup. Nothing was deleted.");
-        }
+        var old = Path.GetFullPath(state.OriginalPath);
+        var backup = Path.GetFullPath(state.BackupPath);
+        var stage = Path.GetFullPath(state.TargetPath);
+        // A corrupt or tampered journal must not let an updater move arbitrary paths.
+        if (SamePath(old, ExtensionDirectory) || IsWithin(old, RootDirectory) ||
+            !backup.StartsWith(old + ".KoBa-original-backup-", StringComparison.OrdinalIgnoreCase) ||
+            !stage.StartsWith(old + ".KoBa-prep-stage-", StringComparison.OrdinalIgnoreCase) ||
+            backup.Length > old.Length + 80 || stage.Length > old.Length + 80)
+            throw new InvalidDataException("Migration journal paths are not recognized.");
         RequireBrowsersClosed();
-        if (JunctionPointsTo(state.OriginalPath, ExtensionDirectory))
+        if (Directory.Exists(backup) && !IsReparse(backup) && ReadManifestVersion(backup) is not null)
         {
-            WriteJsonAtomically(MigrationMarker,
-                new MigrationRecord(state.OriginalPath, state.BackupPath, ExtensionDirectory, DateTimeOffset.UtcNow.ToString("O")));
-            File.Delete(MigrationPending);
+            if (!Directory.Exists(old))
+            {
+                Directory.Move(backup, old);
+                File.Delete(MigrationPending);
+                return;
+            }
+            if (!IsReparse(old) && ReadManifestVersion(old) is not null)
+            {
+                WriteJsonAtomically(MigrationMarker,
+                    new MigrationRecord(old, backup, ExtensionDirectory, DateTimeOffset.UtcNow.ToString("O")));
+                File.Delete(MigrationPending);
+                return;
+            }
+            throw new InvalidDataException("Original extension folder changed after backup; inspect before retrying.");
         }
-        else if (!Directory.Exists(state.OriginalPath))
+        if (Directory.Exists(old) && !IsReparse(old) && ReadManifestVersion(old) is not null &&
+            !Directory.Exists(backup))
         {
-            Directory.Move(state.BackupPath, state.OriginalPath);
-            File.Delete(MigrationPending);
+            File.Delete(MigrationPending); // preparation stopped before moving the original
+            return;
         }
-        else throw new InvalidDataException("The old KoBa directory changed during migration; inspect it before proceeding.");
+        throw new InvalidDataException("Cannot safely recover interrupted migration; no files were overwritten.");
     }
 
     private async Task<ReleaseInfo> GetLatestReleaseAsync(CancellationToken cancellationToken)
@@ -401,35 +439,6 @@ internal sealed class InstallerEngine
 
     private static bool IsWithin(string path, string directory) =>
         Path.GetFullPath(path).StartsWith(Path.GetFullPath(directory).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
-
-    private static bool JunctionPointsTo(string path, string target)
-    {
-        if (!IsReparse(path)) return false;
-        try
-        {
-            var resolved = new DirectoryInfo(path).ResolveLinkTarget(returnFinalTarget: true);
-            return resolved is not null && SamePath(resolved.FullName, target);
-        }
-        catch { return false; }
-    }
-
-    private static void CreateJunction(string link, string target)
-    {
-        if (Directory.Exists(link) || File.Exists(link))
-            throw new InvalidOperationException("The old KoBa directory is already occupied; cannot make a safe junction.");
-        var arguments = "/d /c mklink /J \"" + link + "\" \"" + target + "\"";
-        var process = Process.Start(new ProcessStartInfo("cmd.exe", arguments)
-        {
-            UseShellExecute = false, CreateNoWindow = true,
-            RedirectStandardError = true, RedirectStandardOutput = true
-        }) ?? throw new IOException("Unable to start Windows directory junction creation.");
-        if (!process.WaitForExit(10000))
-        {
-            try { process.Kill(entireProcessTree: true); } catch { }
-            throw new IOException("Timed out creating the KoBa directory junction.");
-        }
-        if (process.ExitCode != 0) throw new IOException("Windows could not create the one-time KoBa junction.");
-    }
 
     private static T? ReadJson<T>(string path) where T : class =>
         File.Exists(path) ? JsonSerializer.Deserialize<T>(File.ReadAllText(path)) : null;
