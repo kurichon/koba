@@ -22,11 +22,25 @@ This is an evidence register, not a statement that every user environment was te
 | Launcher vertical position | Drag, saved setting, cross-tab synchronization, Settings slider and reset preserve the composer-based horizontal anchor. |
 | Updates and diagnostics | Optional GitHub release permission/validation and sanitized diagnostics are exercised with controlled responses. |
 
-## Intermittent CI observation (tracked)
+## Popup layout measurement follow-up (October 27, 2026)
 
 Following the documentation-only [PR #5](https://github.com/kurichon/koba/pull/5), the first [main-branch CI run (attempt 1)](https://github.com/kurichon/koba/actions/runs/39923016817/attempts/1) measured a **15 px Reveal-related popup shift** in its Chromium fixture; [attempt 2](https://github.com/kurichon/koba/actions/runs/39923016817/attempts/2) passed the same seven browser scenarios. The v0.3.6 runtime source blobs and packaged SHA-256 were **identical** to the prior qualified release, so the documentation edit did not cause this difference.
 
-Whether the test measured before initial layout had settled or an actual intermittent popup movement remains **unverified**. The detailed reproduction and acceptance criteria are tracked in [issue #6](https://github.com/kurichon/koba/issues/6). Do not claim that every long-idle or live-browser twitch case has been eliminated solely because CI reruns pass.
+The interrupted [PR #7](https://github.com/kurichon/koba/pull/7) addressed a timing gap: a ready card does not establish that the popup's initial `requestAnimationFrame` placement has run. An inline `top` value also survives closing and can describe the previous opening. The completed test repair at [`5a801c4`](https://github.com/kurichon/koba/commit/5a801c44c55d9fabcd00351db633ed7d28c5dd13) uses one bounded two-frame measurement helper in **both** Reveal scenarios and after tab return, and waits for the Reveal response to finish. It retains the strict **≤1 px** requirement and reports before/after geometry; it never waits until a movement disappears.
+
+### Controlled evidence for the repair
+
+| Check | Observed result |
+| --- | --- |
+| Deterministic stale-baseline reproduction | With the popup closed, change the launcher position and synchronously reopen it. The old top was **334 px**, then initial placement moved it to **131 px** before any Reveal. Reveal after the settled baseline moved it **0 px**; no review POST was sent. |
+| Sensitivity to an actual defect | A disposable extension copy deliberately recentered the popup when the answer appeared. The repaired review scenario rejected a **59 px** Reveal movement at the intended assertion. Production runtime source was not modified. |
+| Local development checks | Node.js **24.22.1**, Playwright **1.52.0**, pinned Chromium build **1169** on Linux: both state/update test files and **8/8** actual-extension browser scenarios passed. The same-folder hot-upgrade scenario remains explicitly skipped. |
+| Hosted verification | [GitHub Actions run 40434565750](https://github.com/kurichon/koba/actions/runs/40434565750) passed on the exact test repair commit, including the state/update tests, **8/8** Chromium scenarios and runtime ZIP validation. Final PR and merge checks remain available in [PR #7](https://github.com/kurichon/koba/pull/7/checks). |
+| Runtime and package integrity | All ten packaged files matched the published `v0.3.6` tag byte-for-byte. Rebuilding with `npm run build -- --tag v0.3.6` reproduced SHA-256 `180948881f3159826969d92102cd81f3f9253ff6f1733fe8f371af4261f656d3`. No version bump or replacement release is needed for this test/documentation repair. |
+
+The new reopen scenario is a regression for the **measurement harness and current asynchronous placement**, not a requirement that a stale position remain visible. A future synchronous-placement implementation may legitimately replace that timing precondition while preserving the Reveal-stability assertion.
+
+The controlled reproduction establishes the stale-baseline mechanism; it does **not** conclusively attribute the historical **15 px** observation to that mechanism, nor exclude every transient flicker. [Issue #6](https://github.com/kurichon/koba/issues/6) therefore remains open for the user's long-idle/live Chrome/Brave symptom. The next required evidence is a supported live-browser check after leaving a panel open, switching away and back, and revealing a card, with viewport or intentional launcher movements distinguished from Reveal. Preserve the existing installation, settings and API key; do not use a real grade merely to test layout.
 
 ## Not verified by the automated environment
 

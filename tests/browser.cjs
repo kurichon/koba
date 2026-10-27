@@ -186,6 +186,37 @@ async function cardReady(page, spelling) {
     throw new Error(`${error.message}; ui=${JSON.stringify(visible)}; workers=${JSON.stringify(workers)}`);
   }
 }
+
+async function settledPopupLayout(page) {
+  // Card state can be ready before the extension's queued placement frame.
+  // Inline top alone is insufficient: it survives closing and reopening.
+  // Wait through a fixed frame boundary, never poll until movement disappears.
+  return page.locator('.popup').evaluate(async popup => {
+    await new Promise((resolve, reject) => {
+      let frame;
+      const timer = setTimeout(() => {
+        cancelAnimationFrame(frame);
+        reject(new Error('Popup animation frames did not run within 7 seconds'));
+      }, 7000);
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => { clearTimeout(timer); resolve(); });
+      });
+    });
+    if (popup.classList.contains('hidden') || !Number.isFinite(Number.parseFloat(popup.style.top))) {
+      throw new Error('Expected a visible, initially positioned popup');
+    }
+    const rect = popup.getBoundingClientRect();
+    return {top:rect.top, inlineTop:popup.style.top, height:rect.height,
+      viewportHeight:window.innerHeight,
+      launcherTop:popup.getRootNode().querySelector('.launcher').getBoundingClientRect().top};
+  });
+}
+
+function assertPopupStable(before, after, action) {
+  assert.ok(Math.abs(before.top - after.top) <= 1,
+    `${action} shifted an initially positioned popup by ${after.top-before.top}px; before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+}
+
 async function runCase(name, fn) {
   if (process.env.JPDB_TEST_CASE && !name.includes(process.env.JPDB_TEST_CASE)) return;
   const start=Date.now();
@@ -195,6 +226,53 @@ async function runCase(name, fn) {
 }
 
 async function run() {
+  await runCase('Popup reopen placement is separate from Reveal movement', async()=>{
+    const a=await app();
+    try {
+      const p=await a.page('placement-baseline');
+      await p.locator('.launcher').click(); await cardReady(p,'猫');
+      const original=await settledPopupLayout(p);
+      await p.locator('.close').click();
+      await until(async()=>a.worker.evaluate(async()=>{
+        const panel=(await chrome.storage.session.get('reviewPanelV3')).reviewPanelV3;
+        return panel?.openTabId === null;
+      }),'popup close acknowledged');
+
+      // Moving the launcher while closed leaves the previous popup top intact.
+      // Reopening applies the new position only on the next animation frame.
+      await a.worker.evaluate(()=>chrome.storage.local.set({launcherPositionY:-65}));
+      await until(()=>p.locator('.launcher').evaluate((button, oldTop)=>
+        button.getBoundingClientRect().top < oldTop-80, original.launcherTop),
+      'closed launcher position changed');
+      const early=await p.locator('#ambient-jpdb-host').evaluate(host=>{
+        const shadow=host.shadowRoot, popup=shadow.querySelector('.popup');
+        // Synchronous DOM dispatch samples after the real click handler but
+        // before any queued extension animation frame can execute.
+        shadow.querySelector('.launcher').click();
+        return {top:popup.getBoundingClientRect().top, inlineTop:popup.style.top,
+          open:!popup.classList.contains('hidden'),
+          answer:!shadow.querySelector('.answer').classList.contains('hidden')};
+      });
+      assert.equal(early.open,true);
+      assert.equal(early.answer,false,'no Reveal has occurred');
+      assert.equal(early.inlineTop,original.inlineTop,'reopen retains a stale finite inline top');
+      assert.equal(early.top,original.top,'the stale position is still observable before the frame');
+      await cardReady(p,'猫');
+      const placed=await settledPopupLayout(p);
+      assert.ok(Math.abs(placed.top-early.top)>1,'initial placement must expose the stale baseline');
+      assert.equal((await ui(p)).answer,false,'placement movement happens without Reveal');
+
+      await p.locator('.reveal').click(); await cardReady(p,'猫');
+      assert.equal((await ui(p)).answer,true);
+      const revealed=await settledPopupLayout(p);
+      assertPopupStable(placed,revealed,'Reveal');
+      assert.equal(await a.attempts(),0,'layout checks must never submit a grade');
+      assert.deepEqual(a.errors,[]);
+      return {prePlacementTop:early.top,placedTop:placed.top,
+        movementWithoutReveal:placed.top-early.top,revealMovement:revealed.top-placed.top,reviewPosts:0};
+    } finally {await a.close();}
+  });
+
   await runCase('Vertical launcher adjustment remains anchored, persists and does not affect reviews', async()=>{
     const a=await app();
     try {
@@ -245,13 +323,16 @@ async function run() {
       // Reopen after changing positions and ensure Reveal never makes the popup twitch.
       await first.locator('.launcher').click();
       await first.locator('.launcher').click(); await cardReady(first,'猫');
-      const popupTop=()=>first.locator('.popup').evaluate(el=>el.getBoundingClientRect().top);
-      const topBefore=await popupTop();
+      const beforeReveal=await settledPopupLayout(first);
       await first.locator('.reveal').click();
       await until(async()=>(await ui(first)).answer,'revealed after moving the launcher');
-      assert.ok(Math.abs((await popupTop())-topBefore)<=1,'Reveal must not re-center popup');
+      await cardReady(first,'猫');
+      const afterReveal=await settledPopupLayout(first);
+      assertPopupStable(beforeReveal,afterReveal,'Reveal after moving the launcher');
       await second.bringToFront(); await first.bringToFront();
+      const afterTabReturn=await settledPopupLayout(first);
       assert.ok((await ui(first)).open,'tab activation must not alter popup ownership');
+      assertPopupStable(afterReveal,afterTabReturn,'Tab activation after moving the launcher');
       assert.equal(await a.attempts(),0,'repositioning must never grade a card');
       assert.deepEqual(a.errors,[]);
       return {dragSaved:saved,xAnchorStable:true,settingsPersisted:true,reset:true,revealStable:true};
@@ -384,23 +465,22 @@ async function run() {
       await p.keyboard.type(' 1 2 3 4 5 ');
       assert.equal(await a.attempts(),1,'typing must not submit reviews');
       await p.locator('.launcher').click(); await cardReady(p,'犬');
-      // A displayed answer may expand the popup. Its upper edge must not
-      // jump when Reveal changes the contents (reported v0.3.5 flicker).
-      const popupTop = () => p.locator('.popup').evaluate(el=>el.getBoundingClientRect().top);
-      const topBeforeReveal = await popupTop();
+      // Reveal may expand the answer, but its already-positioned upper edge
+      // must stay pinned, including after the authoritative response arrives.
+      const beforeReveal = await settledPopupLayout(p);
       await p.locator('.reveal').click();
       await until(async()=>(await ui(p)).answer,'answer revealed');
-      const topAfterReveal = await popupTop();
-      assert.ok(Math.abs(topBeforeReveal - topAfterReveal) <= 1,
-        `Reveal shifted popup top by ${topAfterReveal-topBeforeReveal}px`);
+      await cardReady(p,'犬');
+      const afterReveal = await settledPopupLayout(p);
+      assertPopupStable(beforeReveal,afterReveal,'Reveal');
       // Switching to an ordinary ChatGPT tab and back must not flicker the
       // existing popup or steal its ownership.
       const neighbor=await a.page('neighbor-tab');
       await neighbor.bringToFront();
       await p.bringToFront();
+      const afterTabReturn=await settledPopupLayout(p);
       assert.equal((await ui(p)).open,true,'switching tabs alone must not close the review');
-      assert.ok(Math.abs((await popupTop()) - topAfterReveal) <= 1,
-        'tab activation must not move the open popup');
+      assertPopupStable(afterReveal,afterTabReturn,'Tab activation');
       await p.locator('.close').click();
       await p.locator('.launcher').click(); await cardReady(p,'犬');
       assert.equal((await ui(p)).answer,false,'close resets ungraded answer');
