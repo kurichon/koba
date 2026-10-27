@@ -1,0 +1,60 @@
+// Real Chromium check of original unpacked path -> filesystem link -> new payload.
+// Uses a disposable browser profile and fake local data; no JPDB or account traffic.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { chromium } = require('playwright');
+
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'koba-migration-browser-'));
+const old = path.join(base, 'old-extension');
+const payload = path.join(base, 'AppData', 'KoBa', 'Extension');
+const backup = path.join(base, 'preserved-backup');
+const profile = path.join(base, 'browser-profile');
+const fakeValue = 'no-live-key-do-not-send';
+let context = null;
+let stage = 'start';
+const watchdog = setTimeout(() => { console.error('STALLED migration-browser stage:', stage); process.exit(2); }, 90000);
+
+async function launch() {
+    stage = 'launch';
+    context = await chromium.launchPersistentContext(profile, {
+        channel: 'chromium',
+        headless: true,
+        args: ['--disable-extensions-except=' + old, '--load-extension=' + old]
+    });
+    stage = 'service-worker';
+    const worker = context.serviceWorkers()[0] ||
+        await context.waitForEvent('serviceworker', { timeout: 15000 });
+    return { worker, id: new URL(worker.url()).host };
+}
+
+(async () => {
+    fs.cpSync(path.join(__dirname, '..', 'extension'), old, { recursive: true });
+    const original = await launch();
+    stage = 'store-sentinel';
+    await original.worker.evaluate(value => chrome.storage.local.set({ kobaMigrationSentinel: value }), fakeValue);
+    stage = 'close-first';
+    await context.close();
+    context = null;
+    fs.mkdirSync(path.dirname(payload), { recursive: true });
+    fs.renameSync(old, backup);
+    fs.cpSync(backup, payload, { recursive: true });
+    fs.symlinkSync(payload, old, 'dir');
+    const linked = await launch();
+    stage = 'read-sentinel';
+    const restored = await linked.worker.evaluate(async () =>
+        (await chrome.storage.local.get('kobaMigrationSentinel')).kobaMigrationSentinel);
+    assert.equal(linked.id, original.id, 'unpacked extension ID changed across same-path link');
+    assert.equal(restored, fakeValue, 'browser-local storage was detached from the original ID');
+    stage = 'close-second';
+    await context.close();
+    context = null;
+    console.log('PASS Chromium: original-path link preserved extension ID and local storage after restart.');
+})().catch(error => { console.error('FAIL', stage, error); process.exitCode = 1; })
+.finally(async () => {
+    clearTimeout(watchdog);
+    try { await context?.close(); } catch {}
+    try { if (fs.lstatSync(old).isSymbolicLink()) fs.unlinkSync(old); } catch {}
+    try { fs.rmSync(base, { recursive: true, force: true }); } catch {}
+});

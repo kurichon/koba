@@ -20,6 +20,8 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: xvfb-run -a npm run test:browser
+      - name: Verify original-path bridge preserves Chromium local storage (Linux link)
+        run: timeout --signal=KILL 90s xvfb-run -a node tests/migration-browser.cjs
       - run: npm run build
 
   windows-installer:
@@ -47,7 +49,3 @@ jobs:
           $zip = (Get-ChildItem dist/KoBa_v*.zip | Select-Object -First 1).FullName
           & ./dist/windows/KoBaSetup.exe --self-test $zip
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Prove unpacked identity survives the junction in Chromium
-        run: |
-          npx playwright install chromium
-          node tests/windows-path-identity.cjs
