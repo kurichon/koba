@@ -92,7 +92,7 @@ internal static class SetupSelfTest
             using (var output = ZipFile.Open(malformed, ZipArchiveMode.Create))
             {
                 output.CreateEntry("../manifest.json");
-                foreach (var file in new[] { "LICENSE", "background.js", "content.js", "lib.js", "options.html",
+                foreach (var file in new[] { "LICENSE", "background.js", "content.js", "lib.js", "migration.js", "options.html",
                                             "options.js", "panel.js", "session.js", "updates.js" })
                     output.CreateEntry(file);
             }

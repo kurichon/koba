@@ -16,7 +16,7 @@ internal sealed class InstallerEngine
 {
     private static readonly string[] RuntimeFiles =
     {
-        "LICENSE", "background.js", "content.js", "lib.js", "manifest.json",
+        "LICENSE", "background.js", "content.js", "lib.js", "manifest.json", "migration.js",
         "options.html", "options.js", "panel.js", "session.js", "updates.js"
     };
     private const long MaxArchiveBytes = 25 * 1024 * 1024;
@@ -385,7 +385,7 @@ internal sealed class InstallerEngine
         var seen = new HashSet<string>(StringComparer.Ordinal);
         long total = 0;
         if (file.Entries.Count != RuntimeFiles.Length)
-            throw new InvalidDataException("KoBa ZIP does not contain exactly ten reviewed runtime files.");
+            throw new InvalidDataException("KoBa ZIP does not contain exactly eleven reviewed runtime files.");
         foreach (var entry in file.Entries)
         {
             if (!expected.Contains(entry.FullName) || !seen.Add(entry.FullName) ||

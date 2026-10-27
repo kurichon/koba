@@ -92,6 +92,24 @@
     </details>
   </section>
 
+  <section id="migrationSection">
+    <h2 style="font-size:16px;margin-top:0">One-time KoBa migration</h2>
+    <p>Moving an unpacked extension to a different folder may change its browser identity.
+       Transfer browser-local settings separately, exactly once. Future AppData updates do not use this procedure.</p>
+    <p class="note"><strong>Old KoBa installation:</strong> select <b>Export migration file</b>. This file
+       includes your JPDB API key and review recovery data. Keep it private, never upload or share it,
+       and delete it securely after the transfer is verified.</p>
+    <p class="note"><strong>New AppData installation:</strong> Load unpacked from
+       <code>%LOCALAPPDATA%\KoBa\Extension</code>, open this page and import the export.
+       The destination must be unconfigured. Keep the old extension until you verify the transfer.</p>
+    <div class="row">
+      <button id="migrationExport" type="button">Export migration file</button>
+      <input id="migrationFile" type="file" accept=".json,application/json" aria-label="KoBa migration JSON">
+      <button id="migrationImport" type="button">Import into new KoBa</button>
+    </div>
+    <div id="migrationStatus" class="status" role="status" aria-live="polite"></div>
+  </section>
+
   <section>
     <h2 style="font-size:16px;margin-top:0">Diagnostics</h2>
     <dl>
