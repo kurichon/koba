@@ -49,3 +49,9 @@ jobs:
           $zip = (Get-ChildItem dist/KoBa_v*.zip | Select-Object -First 1).FullName
           & ./dist/windows/KoBaSetup.exe --self-test $zip
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KoBaSetup-windows-candidate
+          path: dist/windows/KoBaSetup.exe
+          if-no-files-found: error
+          retention-days: 7

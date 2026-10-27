@@ -2,7 +2,7 @@
 
 [← Back to KoBa](../README.md) · [Current architecture](ARCHITECTURE.md) · [Development](DEVELOPMENT.md)
 
-**Current public release:** [KoBa v0.3.7](https://github.com/kurichon/koba/releases/tag/v0.3.7) · **Tagged source:** [`3335543`](https://github.com/kurichon/koba/commit/3335543dbbb998e87a8b7e25e6fc8eb7ffab95de) · **Released:** October 27, 2026.
+**New Windows installer candidate:** v0.3.8; not publicly released until its Windows/AppData qualification is complete. **Current public release:** [KoBa v0.3.7](https://github.com/kurichon/koba/releases/tag/v0.3.7) · **Tagged source:** [`3335543`](https://github.com/kurichon/koba/commit/3335543dbbb998e87a8b7e25e6fc8eb7ffab95de) · **Released:** October 27, 2026.
 
 This record separates demonstrated behavior from checks that require a live user installation. KoBa provides manual review, a vertically adjustable launcher, stable Reveal, JPDB scheduling, safe review recovery, and optional GitHub update notifications.
 
@@ -53,3 +53,12 @@ That evidence does not conclusively explain the historical 15 px observation or 
 - Browser-managed automatic installation. The unpacked distribution supports update notification and manual replacement/reload.
 
 These are bounded verification gaps, not claims of failure. Passing controlled checks does not establish behavior in an untested live environment.
+
+
+## v0.3.8 Windows managed installation candidate
+
+The new Windows setup/updater installs the canonical extension ZIP into `%LOCALAPPDATA%\KoBa\Extension`, keeps a reusable `KoBaSetup.exe` alongside it, validates the official GitHub checksum and allowlisted ZIP members, and stages/buffers old versions for recovery. A one-time migration wizard renames the original unpacked folder into a retained backup and creates an old-path Windows directory junction. Subsequent updates target only AppData. The wizard cannot repeat after its success marker; an explicit undo restores the original folder.
+
+Windows CI must build a self-contained setup executable and exercise first install, same-version reinstallation, checksum rejection, malicious ZIP rejection, later version update without migration, retained backup and rollback. A disposable Chromium profile test on Linux exercises linked-path identity and `chrome.storage.local` continuity. **A real existing Chrome/Brave Windows profile remains the final migration identity gate.** The installer never edits browser profile databases or transfers API keys.
+
+An unsigned executable can trigger Windows SmartScreen. Do not claim automatic browser reload or end-to-end live-account verification; close the browsers first and then reload the extension as needed.
