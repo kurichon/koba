@@ -47,7 +47,7 @@ internal static class SetupSelfTest
             Equal(version, engine.GetInstalledVersion(), "migrated AppData version");
             Check(File.Exists(Path.Combine(migration.BackupPath, "user-preserved-example.txt")),
                   "extra files are retained only in the original backup");
-            Throws<InvalidOperationException>(() => engine.MigrateOnce(source),
+            Throws<InvalidOperationException>(() => engine.PrepareMigrationOnce(source),
                 "a completed one-time migration cannot repeat");
 
             // Simulate a different future release while keeping the installer itself unchanged.
