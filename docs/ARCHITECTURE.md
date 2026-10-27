@@ -66,4 +66,6 @@ Local API-key fingerprints scope cache records; **they are not encryption**. Tre
 
 The build allowlists ten files from `extension/`, including the MIT license, and produces one `KoBa_vVERSION.zip` plus `SHA256SUMS.txt`. The archive contains no tests, docs, Node dependencies or credentials. Tests and build are in GitHub Actions; the normal release workflow prepares a **draft**, which must be deliberately published.
 
-The [v0.3.6 stable release](https://github.com/kurichon/koba/releases/tag/v0.3.6) is public. Update checking discovers newer published releases but **cannot install them automatically** into an unpacked Chrome/Brave extension. See [update policy](UPDATES.md) and [developer release steps](DEVELOPMENT.md).
+The [v0.3.7 stable release](https://github.com/kurichon/koba/releases/tag/v0.3.7) is public, with one KoBa ZIP and its checksum file. The approved retirement of duplicate package aliases and the obsolete draft is complete; existing KoBa package bytes and source tags were preserved. See the [release evidence](QUALIFICATION.md).
+
+Update checking discovers newer published releases but **cannot install them automatically** into an unpacked Chrome/Brave extension. See [update policy](UPDATES.md) and [developer release steps](DEVELOPMENT.md).
