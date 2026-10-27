@@ -26,7 +26,13 @@ async function launch() {
     stage = 'service-worker';
     const worker = context.serviceWorkers()[0] ||
         await context.waitForEvent('serviceworker', { timeout: 15000 });
-    return { worker, id: new URL(worker.url()).host };
+    // The MV3 worker can be observable before the Chrome extension APIs are ready.
+    for (let i = 0; i < 100; i++) {
+        if (await worker.evaluate(() => Boolean(globalThis.chrome?.storage?.local)).catch(() => false))
+            return { worker, id: new URL(worker.url()).host };
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw new Error('Extension service worker started but storage API never became ready: ' + worker.url());
 }
 
 (async () => {
