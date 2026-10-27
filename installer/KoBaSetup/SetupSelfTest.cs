@@ -62,7 +62,6 @@ internal static class SetupSelfTest
                     using var stream = created.Open();
                     if (entry.FullName == "manifest.json")
                     {
-                        var data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(entry.Open())!;
                         var json = File.ReadAllText(Path.Combine(engine.ExtensionDirectory, "manifest.json"));
                         var updated = json.Replace("\"version\": \"" + version + "\"", "\"version\": \"" + next + "\"");
                         using var writer = new StreamWriter(stream);
