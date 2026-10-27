@@ -22,31 +22,32 @@ KoBa is a free, open-source browser extension for **desktop Chrome and Brave**. 
 
 ## Installation
 
-### Windows (recommended)
+### Windows installer and updater (planned for v0.3.8)
 
-1. Download **`KoBaSetup.exe`** from [the latest published release](https://github.com/kurichon/koba/releases/latest). This is the Windows installer/updater; `KoBa_vX.Y.Z.zip` remains the single extension-only package.
-2. Run the installer. Select **Install / Update KoBa**. KoBa goes into **`%LOCALAPPDATA%\KoBa\Extension`** (the same path for all future versions); a reusable `KoBaSetup.exe` is also saved under `%LOCALAPPDATA%\KoBa`.
-3. Open `chrome://extensions` or `brave://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the **Extension** folder above. This browser approval is required once for a new installation.
-4. Open KoBa's extension options, add your **JPDB API key**, click **Save** and then **Test connection**. Refresh [ChatGPT](https://chatgpt.com/) and click the small `○` launcher.
+KoBa v0.3.7 is the current published stable extension-only release. Starting with the qualified v0.3.8 release, Windows builds will also provide **KoBaSetup.exe**, a separate installer/updater. Until that is published, use the [current ZIP](https://github.com/kurichon/koba/releases/latest) and follow the portable steps below.
 
-When a later version is published, run the saved **`%LOCALAPPDATA%\KoBa\KoBaSetup.exe`**, close Chrome/Brave, and click **Install / Update KoBa**. The updater validates the official GitHub ZIP and its checksum and replaces only the AppData extension files; no migration is repeated. Reopen the browser and use **Reload** on KoBa's Extensions page if the new version is not yet active.
+1. Download **KoBaSetup.exe** from the new release Assets and run it. Select **Install / Update KoBa**. The installed browser extension files live permanently under **`%LOCALAPPDATA%\KoBa\Extension`**. A reusable `KoBaSetup.exe` is also saved under `%LOCALAPPDATA%\KoBa`.
+2. In Chrome or Brave open `chrome://extensions` or `brave://extensions`, enable Developer mode, click **Load unpacked**, and select the AppData **Extension** folder. Browser approval is required for a first-time installation.
+3. Open KoBa Options, add your JPDB API key, Save and Test connection. Open or refresh [ChatGPT](https://chatgpt.com/) and click KoBa's `○` launcher.
+4. For future updates, close Chrome and Brave (resolve any uncertain JPDB review first), run the saved **`%LOCALAPPDATA%\KoBa\KoBaSetup.exe`**, and select **Install / Update KoBa**. Restart the browser and reload KoBa if necessary. No migration or folder selection repeats.
 
-### One-time migration from an existing KoBa folder (Windows)
+### One-time migration from a manually installed KoBa (Windows)
 
-**Do not uninstall the old browser extension.** Its unpacked extension ID and JPDB data are associated with the original browser path.
+Changing the unpacked installation folder **changes the extension ID** in Chromium. Merely moving the folder or creating a junction can detach the existing browser-local API key and review state. The migration therefore transfers browser-local data **explicitly**. Never delete the old installation until the new one is verified.
 
-1. Resolve any **Review status uncertain** message before closing the browser. Fully exit Chrome and Brave.
-2. Run the Windows installer and choose **Migrate old installation…**. Select the *existing unpacked KoBa directory containing `manifest.json`*. The installer installs a verified current KoBa build in AppData, moves the original directory to a retained backup, and creates a Windows directory junction at its **original** path pointing to AppData.
-3. Reopen Chrome/Brave. Keep the **existing extension entry** loaded from the old path. Confirm your JPDB key and settings remain and the KoBa version has updated; if needed click **Reload** on the existing entry.
-4. If your browser installation behaves differently, close it and use **Undo migration…** in the setup tool. This restores the original directory from the retained backup. Do not remove the backup or your browser extension before verifying the migration.
+1. In the old KoBa extension, resolve any active **Saving…** or **Review status uncertain** item as appropriate. Fully close Chrome and Brave. Run **KoBaSetup.exe**, select **Prepare one-time transfer…**, and choose the **old KoBa folder with `manifest.json`**. Setup retains a copy of the original folder, installs current KoBa files into the **same real old directory path** (so the existing browser entry can export its data), and also installs KoBa in AppData.
+2. Reopen the browser, open **Options on the OLD KoBa extension entry** and choose **Export migration file**. The downloaded `KoBa_Migration_*.json` contains your **JPDB API key, review recovery journal, and browser-local preferences**. **Keep it private. Do not upload or share it.**
+3. In the same browser profile, use **Load unpacked** to register **`%LOCALAPPDATA%\KoBa\Extension`** as a **new** KoBa installation. Open Options on this **new AppData extension** (not the old entry). Select the JSON and choose **Import into new KoBa**. Import refuses existing configured JPDB data and verifies the transfer. The action is marked as completed so it cannot run again.
+4. Verify the JPDB key, button position, review recovery state and normal operation in the new installation. **Only then** remove the old extension entry. Delete the sensitive migration JSON securely after verification. Leave the original folder backup intact until satisfied.
+5. If the old extension fails before transfer, fully close the browser and select **Restore original folder…** in setup. The original files are restored from backup. Setup never modifies Chrome or Brave profile files.
 
-This is a **one-time transition**. The migration marker prevents repeating it; subsequent updates operate solely on the fixed AppData folder. The old-path junction stays in place for the already-registered browser extension. It is **not** a second KoBa installation. Live browser profiles vary; automatic migration of browser storage is deliberately not attempted.
+**The Windows folder-preparation workflow runs at most once.** Later releases are normal AppData-only updates; they do not migrate browser data again.
 
-### Portable ZIP installation (other platforms / developers)
+### Portable ZIP installation (Chrome, Brave and other supported platforms)
 
-Download the single **`KoBa_vX.Y.Z.zip`** asset from [Releases](https://github.com/kurichon/koba/releases/latest), not GitHub's source-code archive. Extract it into a permanent folder, then use **Load unpacked** on that folder. Future portable updates still require replacing those files and clicking **Reload**. Keep the original folder to retain the extension identity.
+Download the single **`KoBa_vX.Y.Z.zip`** from [GitHub Releases](https://github.com/kurichon/koba/releases/latest), not the auto-generated source archive. Extract into a permanent directory containing `manifest.json` and select that directory through **Load unpacked**. Update it by replacing its files **in the same folder** and clicking **Reload**. Never load another copy merely to update.
 
-The first review load may take longer for a large JPDB collection; KoBa shows progress as it checks your vocabulary.
+The first vocabulary scan can be slower for a large JPDB deck. KoBa displays progress while identifying reviewable words.
 
 ## How to use
 
@@ -74,7 +75,7 @@ KoBa reviews **due, failed, and eligible learning vocabulary** already in your J
 
 In KoBa's extension options you can enable/disable the button, manage your JPDB API key, check the connection, adjust button position, request a fresh sync, and view diagnostics.
 
-To check for new versions, open **Settings → Updates**, use repository `kurichon/koba`, and select **Check now** (or opt in to daily checks). GitHub release checks are optional. **KoBa can notify you about an update; the Windows KoBaSetup updater installs verified files on request.** The browser still requires its regular extension reload. ZIP-only users update files manually.
+To check for new versions, open **Settings → Updates**, use repository `kurichon/koba`, and select **Check now** (or opt in to daily checks). GitHub release checks are optional. **KoBa can notify you about updates.** Starting with v0.3.8, the optional Windows KoBaSetup updater can install verified new files on request; browsers still require Reload. ZIP-only users replace their extension files manually.
 
 If KoBa is missing, taking a long time to load, or shows **Review status uncertain**, start with the [troubleshooting and recovery guide](docs/USER_GUIDE.md). For bugs, use [GitHub Issues](https://github.com/kurichon/koba/issues) and include KoBa's **Copy diagnostics** output if useful—**never share your API key**.
 

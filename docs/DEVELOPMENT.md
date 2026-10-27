@@ -10,7 +10,7 @@ This page is for maintainers and contributors. First-time users should start wit
 | --- | --- |
 | `extension/` | Unpacked Chrome/Brave extension, including `manifest.json`, UI, and background worker |
 | `scripts/build-release.mjs` | Builds deterministic, runtime-only release ZIPs with checksums |
-| `installer/KoBaSetup/` | Self-contained Windows installer/updater, transactional swaps and one-time junction migration |
+| `installer/KoBaSetup/` | Self-contained Windows installer/updater, transactional swaps and one-time original-path transfer preparation |
 | `tests/` | Background-state, update-checker, and controlled Chromium tests |
 | `.github/workflows/ci.yml` | Linux extension checks plus Windows installer and browser identity checks |
 | `.github/workflows/release.yml` | Creates a **draft** GitHub release from an exact version tag |
@@ -60,7 +60,7 @@ The default release workflow **does not publish automatically**; historical one-
 
 ## Windows installer verification
 
-CI builds the self-contained `net8.0-windows` WinForms application on Windows, runs `KoBaSetup.exe --self-test dist/KoBa_vVERSION.zip`, and tests the actual native Windows junction, backup, rollback and subsequent update. A separate disposable Chromium profile test on Linux checks original-path symlink identity and `chrome.storage.local` persistence, exercising the analogous path-preservation behavior without claiming live Windows Chrome/Brave verification. The installer stages official release downloads, checks ZIP integrity and allowlisted runtime files, uses an update journal and backup during replacement, and never manipulates user browser profile storage. The first-time migration keeps its own rollback backup and journal. The Windows executable is presently **unsigned**, so Windows SmartScreen may warn. The first end-user installation/reload in a real Chrome or Brave profile remains a live qualification gate.
+CI builds the self-contained `net8.0-windows` WinForms application on Windows, runs `KoBaSetup.exe --self-test dist/KoBa_vVERSION.zip`, and tests ordinary Windows folders, retained backups, explicit rollback and subsequent updates. A disposable Chromium profile test checks that replacing **real files at the same unpacked path** preserves the ID and `chrome.storage.local`, unlike moving to a different unpacked path. Browser transfer uses explicit user-controlled export/import from KoBa Options; no browser-profile databases are edited. The installer stages official release downloads, checks ZIP integrity and allowlisted runtime files, uses an update journal and backup during replacement, and never manipulates user browser profile storage. The one-time preparation keeps its own rollback backup and journal. The export JSON contains the API key and must be handled as a secret; import into a new AppData extension requires explicit user confirmation. The Windows executable is presently **unsigned**, so Windows SmartScreen may warn. The first end-user installation/reload in a real Chrome or Brave profile remains a live qualification gate.
 
 ## Supported installation and verification
 

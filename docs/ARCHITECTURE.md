@@ -2,7 +2,7 @@
 
 [← Back to KoBa](../README.md) · [Development](DEVELOPMENT.md) · [Current qualification](QUALIFICATION.md)
 
-This describes the **current v0.3.7 extension**. KoBa is a Manifest V3 Chrome/Brave extension. It adds a manually opened vocabulary panel to ChatGPT, uses a local API key to talk directly to JPDB, and has no separate server or OpenAI API integration.
+This describes the **v0.3.8 implementation candidate**, not yet published. The public stable release is v0.3.7. KoBa is a Manifest V3 Chrome/Brave extension. It adds a manually opened vocabulary panel to ChatGPT, uses a local API key to talk directly to JPDB, and has no separate server or OpenAI API integration.
 
 ## Source responsibilities
 
@@ -12,7 +12,8 @@ This describes the **current v0.3.7 extension**. KoBa is a Manifest V3 Chrome/Br
 | `extension/background.js` | JPDB requests; one authoritative shared review session; tab ownership; queue/cache; submission journal and recovery; content-script reinjection |
 | `extension/panel.js`, `extension/session.js` | Intent/ownership and session/revision validation |
 | `extension/lib.js` | Reviewable-card eligibility and sorting; due-time and authoritative-card-change interpretation |
-| `extension/options.html`, `extension/options.js` | API key and enabled setting; vertical launcher control; sync, diagnostics, update settings |
+| `extension/options.html`, `extension/options.js` | API key and enabled setting; vertical launcher control; sync, diagnostics, update settings; one-time transfer controls |
+| `extension/migration.js` | User-controlled local export/import, allowlisted fields, integrity verification, and refusal to overwrite configured data |
 | `extension/updates.js` | Optional GitHub release discovery with strict validation and bounded network requests |
 | `scripts/build-release.mjs` | Allowlisted runtime packaging, version checks, reproducible ZIPs and hashes |
 
@@ -64,8 +65,10 @@ Local API-key fingerprints scope cache records; **they are not encryption**. Tre
 
 ## Packaging and distribution
 
-The build allowlists ten files from `extension/`, including the MIT license, and produces one `KoBa_vVERSION.zip` plus `SHA256SUMS.txt`. The archive contains no tests, docs, Node dependencies or credentials. The optional Windows `KoBaSetup.exe` installs or updates these files under `%LOCALAPPDATA%\\KoBa\\Extension` and retains backups. A one-time legacy directory junction migrates the payload without editing browser storage; subsequent updates use AppData only. Tests and build are in GitHub Actions; the normal release workflow prepares a **draft**, which must be deliberately published.
+The build allowlists eleven files from `extension/`, including the MIT license, and produces one `KoBa_vVERSION.zip` plus `SHA256SUMS.txt`. The archive contains no tests, docs, Node dependencies or credentials. The optional Windows `KoBaSetup.exe` installs or updates files under `%LOCALAPPDATA%\KoBa\Extension`, using verified downloads and retained backups.
 
-The [v0.3.7 stable release](https://github.com/kurichon/koba/releases/tag/v0.3.7) is public, with one KoBa ZIP and its checksum file. The approved retirement of duplicate package aliases and the obsolete draft is complete; existing KoBa package bytes and source tags were preserved. See the [release evidence](QUALIFICATION.md).
+Migrating an existing unpacked extension requires a **one-time user-mediated local data transfer**: the setup wizard leaves a real directory at the original browser path (and backs up the original files), so the old KoBa extension can export browser-local settings and review recovery. The new AppData installation uses a different extension ID, imports the user-held file after explicit confirmation and records a one-time marker. No junctions, direct browser-profile editing or automatic credential upload are involved. Subsequent updates only replace AppData files.
+
+Tests and build are in GitHub Actions; the release workflow prepares an unpublished **draft**, deliberately published only after qualification.
 
 Update checking discovers newer published releases but **cannot install them automatically** into an unpacked Chrome/Brave extension. See [update policy](UPDATES.md) and [developer release steps](DEVELOPMENT.md).
